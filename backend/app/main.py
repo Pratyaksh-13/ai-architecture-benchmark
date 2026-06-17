@@ -2,10 +2,9 @@
 
 from fastapi import FastAPI
 from app.database.connection import Base, engine
-from app.models import project  # Import model so SQLAlchemy sees it
-from app.api import projects    # Import router
+from app.models import project, architecture  # Import both models
+from app.api import projects
 
-# Create all tables on startup (safe to run repeatedly)
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -14,7 +13,6 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# Register routers
 app.include_router(projects.router, prefix="/api/v1")
 
 @app.get("/")

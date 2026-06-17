@@ -1,5 +1,9 @@
 # app/api/projects.py
-
+from app.schemas.architecture import GenerateRequest, GenerateResponse
+from app.services.architecture_service import (
+    generate_architectures_for_project,
+    get_architectures_for_project,
+)
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 from app.database.connection import get_db
@@ -43,3 +47,25 @@ def get_project(project_id: int, db: Session = Depends(get_db)):
 def remove_project(project_id: int, db: Session = Depends(get_db)):
     """Delete a project by ID."""
     return delete_project(db, project_id)
+
+
+
+@router.post("/{project_id}/generate", response_model=GenerateResponse)
+def generate_architectures(
+    project_id: int,
+    payload: GenerateRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Trigger LLM architecture generation for a project.
+    Optionally specify 'provider': 'claude' or 'openai' in the request body.
+    """
+    architectures = generate_architectures_for_project(db, project_id, payload.provider)
+    return {"project_id": project_id, "architectures": architectures}
+
+
+@router.get("/{project_id}/architectures", response_model=GenerateResponse)
+def list_architectures(project_id: int, db: Session = Depends(get_db)):
+    """Return all previously generated architectures for a project."""
+    architectures = get_architectures_for_project(db, project_id)
+    return {"project_id": project_id, "architectures": architectures}
