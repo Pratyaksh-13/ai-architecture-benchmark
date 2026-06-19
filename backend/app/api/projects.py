@@ -1,4 +1,9 @@
 # app/api/projects.py
+from app.schemas.benchmark import BenchmarkResponse, ProjectBenchmarksResponse
+from app.services.benchmark_service import (
+    simulate_benchmarks_for_project,
+    get_benchmarks_for_project,
+)
 from app.schemas.architecture import GenerateRequest, GenerateResponse
 from app.services.architecture_service import (
     generate_architectures_for_project,
@@ -69,3 +74,18 @@ def list_architectures(project_id: int, db: Session = Depends(get_db)):
     """Return all previously generated architectures for a project."""
     architectures = get_architectures_for_project(db, project_id)
     return {"project_id": project_id, "architectures": architectures}
+@router.post("/{project_id}/benchmark", response_model=ProjectBenchmarksResponse)
+def run_benchmark(project_id: int, db: Session = Depends(get_db)):
+    """
+    Simulate benchmark metrics for all architectures in a project.
+    Safe to call multiple times — regenerates fresh metrics each time.
+    """
+    benchmarks = simulate_benchmarks_for_project(db, project_id)
+    return {"project_id": project_id, "benchmarks": benchmarks}
+
+
+@router.get("/{project_id}/benchmarks", response_model=ProjectBenchmarksResponse)
+def get_benchmarks(project_id: int, db: Session = Depends(get_db)):
+    """Return stored benchmark metrics for a project."""
+    benchmarks = get_benchmarks_for_project(db, project_id)
+    return {"project_id": project_id, "benchmarks": benchmarks}

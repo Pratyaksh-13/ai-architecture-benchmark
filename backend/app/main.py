@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from app.database.connection import Base, engine
 from app.models import project, architecture  # Import both models
 from app.api import projects
+from app.models import project, architecture, benchmark  # add benchmark
 
 Base.metadata.create_all(bind=engine)
 
