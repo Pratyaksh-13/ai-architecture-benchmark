@@ -23,7 +23,9 @@ before or after) matching this exact structure - a JSON array of 3 objects:
   { "arch_type": "microservices", ... },
   { "arch_type": "event_driven", ... }
 ]
-
+For mermaid_diagram, use ONLY simple flowchart LR syntax. Do not use subgraphs, \
+classDef, style, or any advanced Mermaid features. Keep diagrams to under 10 nodes. \
+Example valid format: flowchart LR\\n    A[Client] --> B[Server]\\n    B --> C[(Database)]
 CRITICAL: Your entire response must be the raw JSON array and nothing else. Do not \
 write "Here is the JSON" or any commentary. Start your response with [ and end with ].
 """
