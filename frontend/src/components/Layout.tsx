@@ -1,4 +1,5 @@
 import { Outlet, NavLink } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 const navLinks = [
   {
@@ -28,6 +29,8 @@ const navLinks = [
 ]
 
 export default function Layout() {
+  const { user, logout } = useAuth()
+
   return (
     <div className="flex min-h-screen bg-dark-900">
       {/* Sidebar */}
@@ -73,15 +76,20 @@ export default function Layout() {
           ))}
         </nav>
 
-        {/* Footer */}
+        {/* Footer — user info + logout */}
         <div className="p-4 border-t border-dark-700">
-          <p className="text-[10px] text-slate-700 text-center">AI Architecture Benchmarking</p>
+          <p className="text-slate-500 text-xs mb-2 truncate">{user?.email}</p>
+          <button
+            onClick={logout}
+            className="text-xs text-slate-500 hover:text-red-400 transition-colors"
+          >
+            log out
+          </button>
         </div>
       </aside>
 
       {/* Main */}
       <main className="flex-1 overflow-auto">
-        {/* Top bar accent line */}
         <div className="h-px w-full bg-gradient-to-r from-transparent via-accent-purple/30 to-transparent" />
         <div className="p-8 max-w-7xl mx-auto">
           <Outlet />

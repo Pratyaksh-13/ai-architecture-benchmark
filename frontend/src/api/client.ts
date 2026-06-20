@@ -3,7 +3,10 @@ import type { Project, ProjectListResponse, GenerateResponse } from '../types'
 import type { ProjectBenchmarksResponse } from '../types'
 import type { Recommendation } from '../types'
 
-const api = axios.create({ baseURL: '/api/v1' })
+const api = axios.create({
+  baseURL: '/api/v1',
+  withCredentials: true,   
+})
 
 export const createProject = async (requirement: string): Promise<Project> => {
   const { data } = await api.post('/projects/', { requirement })
@@ -58,4 +61,22 @@ export const getRecommendation = async (id: number): Promise<Recommendation | nu
   } catch {
     return null  // 404 means no recommendation yet — not an error state
   }
+}
+export const signup = async (email: string, password: string) => {
+  const { data } = await api.post('/auth/signup', { email, password })
+  return data
+}
+
+export const login = async (email: string, password: string) => {
+  const { data } = await api.post('/auth/login', { email, password })
+  return data
+}
+
+export const logout = async () => {
+  await api.post('/auth/logout')
+}
+
+export const getCurrentUser = async () => {
+  const { data } = await api.get('/auth/me')
+  return data
 }

@@ -1,24 +1,21 @@
 # app/main.py
-from fastapi.middleware.cors import CORSMiddleware
+
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.database.connection import Base, engine
-from app.models import project, architecture  # Import both models
+from app.models import project, architecture, benchmark, recommendation, user
 from app.api import projects
-from app.models import project, architecture, benchmark  # add benchmark
-from app.models import project, architecture, benchmark, recommendation
 from app.auth.router import router as auth_router
 
 Base.metadata.create_all(bind=engine)
-
-
-
-
 
 app = FastAPI(
     title="AI Architecture Benchmarking Platform",
     description="Generate, compare, and benchmark software architectures with AI",
     version="0.1.0",
 )
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],  # exact frontend origin, NOT "*"
@@ -27,6 +24,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(projects.router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
 
 @app.get("/")

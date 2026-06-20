@@ -1,24 +1,12 @@
 # app/api/projects.py
-from fastapi import APIRouter, Depends, HTTPException, status
+
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
 from app.auth.dependencies import get_current_user
 from app.models.user import User
-from app.services import project_service
-from app.schemas.benchmark import BenchmarkResponse, ProjectBenchmarksResponse
-from app.services.benchmark_service import (
-    simulate_benchmarks_for_project,
-    get_benchmarks_for_project,
-)
-from app.schemas.architecture import GenerateRequest, GenerateResponse
-from app.services.architecture_service import (
-    generate_architectures_for_project,
-    get_architectures_for_project,
-)
-from fastapi import APIRouter, Depends, status
-from sqlalchemy.orm import Session
-from app.database.connection import get_db
+
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectListResponse
 from app.services.project_service import (
     create_project,
@@ -26,6 +14,19 @@ from app.services.project_service import (
     get_project_by_id,
     delete_project,
 )
+
+from app.schemas.architecture import GenerateRequest, GenerateResponse
+from app.services.architecture_service import (
+    generate_architectures_for_project,
+    get_architectures_for_project,
+)
+
+from app.schemas.benchmark import BenchmarkResponse, ProjectBenchmarksResponse
+from app.services.benchmark_service import (
+    simulate_benchmarks_for_project,
+    get_benchmarks_for_project,
+)
+
 from app.schemas.recommendation import RecommendRequest, RecommendationResponse
 from app.services.recommendation_service import (
     generate_recommendation,
@@ -34,7 +35,7 @@ from app.services.recommendation_service import (
 
 router = APIRouter(
     prefix="/projects",
-    tags=["Projects"],          # Groups endpoints in Swagger UI
+    tags=["Projects"],
 )
 
 
@@ -42,9 +43,10 @@ router = APIRouter(
 def create_newproject(
     payload: ProjectCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),   # NEW
+    current_user: User = Depends(get_current_user),
 ):
-    return project_service.create_project(db, payload, user_id=current_user.id) 
+    """Create a new architecture benchmarking project. Requires login."""
+    return create_project(db, payload, user_id=current_user.id)
 
 
 @router.get("/", response_model=ProjectListResponse)
@@ -66,7 +68,6 @@ def remove_project(project_id: int, db: Session = Depends(get_db)):
     return delete_project(db, project_id)
 
 
-
 @router.post("/{project_id}/generate", response_model=GenerateResponse)
 def generate_architectures(
     project_id: int,
@@ -86,6 +87,8 @@ def list_architectures(project_id: int, db: Session = Depends(get_db)):
     """Return all previously generated architectures for a project."""
     architectures = get_architectures_for_project(db, project_id)
     return {"project_id": project_id, "architectures": architectures}
+
+
 @router.post("/{project_id}/benchmark", response_model=ProjectBenchmarksResponse)
 def run_benchmark(project_id: int, db: Session = Depends(get_db)):
     """
@@ -101,6 +104,7 @@ def get_benchmarks(project_id: int, db: Session = Depends(get_db)):
     """Return stored benchmark metrics for a project."""
     benchmarks = get_benchmarks_for_project(db, project_id)
     return {"project_id": project_id, "benchmarks": benchmarks}
+
 
 @router.post("/{project_id}/recommend", response_model=RecommendationResponse)
 def recommend_architecture(

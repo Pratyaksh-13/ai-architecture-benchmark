@@ -5,11 +5,12 @@ from app.models.project import Project
 from app.schemas.project import ProjectCreate
 from fastapi import HTTPException
 
-def create_project(db: Session, data: ProjectCreate) -> Project:
+def create_project(db: Session, data: ProjectCreate, user_id: int | None = None) -> Project:
     """Create a new project from a user requirement."""
     project = Project(
         requirement=data.requirement,
-        status="pending"
+        status="pending",
+        user_id=user_id,
     )
     db.add(project)
     db.commit()
