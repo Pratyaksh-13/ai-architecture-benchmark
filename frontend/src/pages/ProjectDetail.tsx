@@ -4,10 +4,11 @@ import { getProject, getArchitectures, runBenchmark, getBenchmarks } from '../ap
 import ArchitectureCard from '../components/ArchitectureCard'
 import type { Project, Architecture, Benchmark } from '../types'
 import {
-  RadarChart, Radar, PolarGrid, PolarAngleAxis,
   ResponsiveContainer, Legend, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from 'recharts'
+import { generateRecommendation, getRecommendation } from '../api/client'
+import type { Recommendation } from '../types'
 
 const ARCH_COLORS: Record<string, string> = {
   monolithic: '#14b8a6',
@@ -22,6 +23,8 @@ export default function ProjectDetail() {
   const [benchmarks, setBenchmarks] = useState<Benchmark[]>([])
   const [benchmarking, setBenchmarking] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [recommendation, setRecommendation] = useState<Recommendation | null>(null)
+  const [recommending, setRecommending] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -29,10 +32,12 @@ export default function ProjectDetail() {
       getProject(Number(id)),
       getArchitectures(Number(id)),
       getBenchmarks(Number(id)),
-    ]).then(([p, a, b]) => {
+      getRecommendation(Number(id)),
+    ]).then(([p, a, b, r]) => {
       setProject(p)
       setArchitectures(a.architectures)
       setBenchmarks(b.benchmarks)
+      setRecommendation(r)
     }).finally(() => setLoading(false))
   }, [id])
 
@@ -42,6 +47,19 @@ export default function ProjectDetail() {
     const result = await runBenchmark(Number(id))
     setBenchmarks(result.benchmarks)
     setBenchmarking(false)
+  }
+
+  const handleRecommend = async () => {
+    if (!id) return
+    setRecommending(true)
+    try {
+      const result = await generateRecommendation(Number(id))
+      setRecommendation(result)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setRecommending(false)
+    }
   }
 
   // Build chart data — one entry per architecture type
@@ -61,15 +79,6 @@ export default function ProjectDetail() {
       name: arch.arch_type.replace('_', '-'),
       'req/s': bm?.throughput_rps ?? 0,
     }
-  })
-
-  const radarData = ['latency_p99_ms', 'throughput_rps', 'error_rate_pct', 'cpu_usage_pct', 'memory_usage_mb'].map(metric => {
-    const entry: Record<string, any> = { metric: metric.replace(/_/g, ' ').replace(' ms', '').replace(' pct', ' %').replace(' rps', ' rps') }
-    architectures.forEach(arch => {
-      const bm = benchmarks.find(b => b.architecture_id === arch.id)
-      entry[arch.arch_type] = bm ? (bm as any)[metric] : 0
-    })
-    return entry
   })
 
   if (loading) return <p className="text-slate-500 text-sm">loading...</p>
@@ -94,11 +103,40 @@ export default function ProjectDetail() {
         {benchmarks.length > 0 && (
           <span className="text-xs text-slate-500">simulated · {new Date(benchmarks[0].created_at).toLocaleString()}</span>
         )}
+        {benchmarks.length > 0 && (
+          <button
+            onClick={handleRecommend}
+            disabled={recommending}
+            className="text-xs bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg transition-colors"
+          >
+            {recommending ? 'analyzing...' : recommendation ? '↺ re-analyze' : '✨ get recommendation'}
+          </button>
+        )}
       </div>
+
+      {/* Recommendation banner */}
+      {recommendation && (
+        <div className="bg-gradient-to-r from-amber-950/40 to-dark-800 border border-amber-900/50 rounded-xl p-5 mb-8">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-amber-400 text-xs font-bold tracking-widest uppercase">✨ recommended</span>
+            <span className="text-slate-200 text-sm font-medium">{recommendation.recommended_arch_type.replace('_', '-')}</span>
+            <span className="text-slate-500 text-xs ml-auto">
+              confidence: {(recommendation.confidence_score * 100).toFixed(0)}%
+            </span>
+          </div>
+          <p className="text-slate-400 text-sm leading-relaxed">{recommendation.reasoning}</p>
+        </div>
+      )}
 
       {/* Architecture cards */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-10">
-        {architectures.map(a => <ArchitectureCard key={a.id} arch={a} />)}
+        {architectures.map(a => (
+          <ArchitectureCard
+            key={a.id}
+            arch={a}
+            isRecommended={recommendation?.recommended_arch_type === a.arch_type}
+          />
+        ))}
       </div>
 
       {/* Benchmark charts — only show after benchmarks run */}

@@ -1,6 +1,8 @@
 import axios from 'axios'
 import type { Project, ProjectListResponse, GenerateResponse } from '../types'
 import type { ProjectBenchmarksResponse } from '../types'
+import type { Recommendation } from '../types'
+
 const api = axios.create({ baseURL: '/api/v1' })
 
 export const createProject = async (requirement: string): Promise<Project> => {
@@ -42,4 +44,18 @@ export const runBenchmark = async (id: number): Promise<ProjectBenchmarksRespons
 export const getBenchmarks = async (id: number): Promise<ProjectBenchmarksResponse> => {
   const { data } = await api.get(`/projects/${id}/benchmarks`)
   return data
+}
+
+export const generateRecommendation = async (id: number, provider?: string): Promise<Recommendation> => {
+  const { data } = await api.post(`/projects/${id}/recommend`, { provider })
+  return data
+}
+
+export const getRecommendation = async (id: number): Promise<Recommendation | null> => {
+  try {
+    const { data } = await api.get(`/projects/${id}/recommendation`)
+    return data
+  } catch {
+    return null  // 404 means no recommendation yet — not an error state
+  }
 }

@@ -3,9 +3,10 @@ import mermaid from 'mermaid'
 import type { Architecture } from '../types'
 
 mermaid.initialize({
-     theme: 'dark', 
-     startOnLoad: false,
-    suppressErrorRendering: true, })
+  theme: 'dark',
+  startOnLoad: false,
+  suppressErrorRendering: true,
+})
 
 const typeColors: Record<string, string> = {
   monolithic: 'text-teal-400',
@@ -13,9 +14,12 @@ const typeColors: Record<string, string> = {
   event_driven: 'text-amber-400',
 }
 
-interface Props { arch: Architecture }
+interface Props {
+  arch: Architecture
+  isRecommended?: boolean
+}
 
-export default function ArchitectureCard({ arch }: Props) {
+export default function ArchitectureCard({ arch, isRecommended }: Props) {
   const mermaidRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -30,7 +34,15 @@ export default function ArchitectureCard({ arch }: Props) {
   }, [arch.mermaid_diagram, arch.id])
 
   return (
-    <div className="bg-dark-800 border border-dark-700 rounded-xl p-5">
+    <div className={`bg-dark-800 rounded-xl p-5 relative ${
+      isRecommended ? 'border-2 border-amber-500' : 'border border-dark-700'
+    }`}>
+      {isRecommended && (
+        <span className="absolute -top-2.5 left-4 bg-amber-500 text-dark-900 text-[10px] font-bold px-2 py-0.5 rounded-full">
+          ✨ BEST FIT
+        </span>
+      )}
+
       <p className={`text-xs font-bold tracking-widest uppercase mb-2 ${typeColors[arch.arch_type] ?? 'text-slate-400'}`}>
         {arch.arch_type.replace('_', '-')}
       </p>

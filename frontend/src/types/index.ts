@@ -46,3 +46,12 @@ export interface ProjectBenchmarksResponse {
   project_id: number
   benchmarks: Benchmark[]
 }
+export interface Recommendation {
+  id: number
+  project_id: number
+  recommended_arch_type: string
+  reasoning: string
+  confidence_score: number
+  llm_provider: string
+  created_at: string
+}
