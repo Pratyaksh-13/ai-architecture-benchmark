@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+# app/auth/router.py
+
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
@@ -8,6 +10,9 @@ from app.auth.security import hash_password, verify_password, create_access_toke
 from app.auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+COOKIE_NAME = "access_token"
+COOKIE_MAX_AGE = 7 * 24 * 60 * 60  # 7 days, in seconds — matches JWT expiry
 
 
 @router.post("/signup", response_model=UserOut, status_code=status.HTTP_201_CREATED)
@@ -23,8 +28,8 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
     return user
 
 
-@router.post("/login", response_model=Token)
-def login(payload: UserLogin, db: Session = Depends(get_db)):
+@router.post("/login")
+def login(payload: UserLogin, response: Response, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == payload.email).first()
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
@@ -33,7 +38,23 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
         )
 
     access_token = create_access_token(data={"sub": str(user.id)})
-    return Token(access_token=access_token)
+
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=access_token,
+        max_age=COOKIE_MAX_AGE,
+        httponly=True,
+        secure=False,        # set True in production (requires HTTPS)
+        samesite="lax",
+    )
+
+    return {"message": "logged in", "user": {"id": user.id, "email": user.email}}
+
+
+@router.post("/logout")
+def logout(response: Response):
+    response.delete_cookie(key=COOKIE_NAME)
+    return {"message": "logged out"}
 
 
 @router.get("/me", response_model=UserOut)

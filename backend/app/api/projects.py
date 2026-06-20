@@ -1,4 +1,11 @@
 # app/api/projects.py
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.database.connection import get_db
+from app.auth.dependencies import get_current_user
+from app.models.user import User
+from app.services import project_service
 from app.schemas.benchmark import BenchmarkResponse, ProjectBenchmarksResponse
 from app.services.benchmark_service import (
     simulate_benchmarks_for_project,
@@ -32,12 +39,12 @@ router = APIRouter(
 
 
 @router.post("/", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
-def create_new_project(payload: ProjectCreate, db: Session = Depends(get_db)):
-    """
-    Create a new architecture benchmarking project.
-    Accepts a natural language requirement.
-    """
-    return create_project(db, payload)
+def create_newproject(
+    payload: ProjectCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),   # NEW
+):
+    return project_service.create_project(db, payload, user_id=current_user.id) 
 
 
 @router.get("/", response_model=ProjectListResponse)
