@@ -19,6 +19,11 @@ from app.services.project_service import (
     get_project_by_id,
     delete_project,
 )
+from app.schemas.recommendation import RecommendRequest, RecommendationResponse
+from app.services.recommendation_service import (
+    generate_recommendation,
+    get_recommendation_for_project,
+)
 
 router = APIRouter(
     prefix="/projects",
@@ -89,3 +94,22 @@ def get_benchmarks(project_id: int, db: Session = Depends(get_db)):
     """Return stored benchmark metrics for a project."""
     benchmarks = get_benchmarks_for_project(db, project_id)
     return {"project_id": project_id, "benchmarks": benchmarks}
+
+@router.post("/{project_id}/recommend", response_model=RecommendationResponse)
+def recommend_architecture(
+    project_id: int,
+    payload: RecommendRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Generate an AI recommendation for the best architecture,
+    based on the requirement and benchmark results.
+    Requires architectures and benchmarks to already exist.
+    """
+    return generate_recommendation(db, project_id, payload.provider)
+
+
+@router.get("/{project_id}/recommendation", response_model=RecommendationResponse)
+def get_recommendation(project_id: int, db: Session = Depends(get_db)):
+    """Fetch the stored recommendation for a project, if any."""
+    return get_recommendation_for_project(db, project_id)
