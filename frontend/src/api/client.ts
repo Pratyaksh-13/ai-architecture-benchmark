@@ -39,8 +39,8 @@ export const getArchitectures = async (id: number): Promise<GenerateResponse> =>
 export const deleteProject = async (id: number): Promise<void> => {
   await api.delete(`/projects/${id}`)
 }
-export const runBenchmark = async (id: number): Promise<ProjectBenchmarksResponse> => {
-  const { data } = await api.post(`/projects/${id}/benchmark`)
+export const runBenchmark = async (id: number, loadProfile: string = 'medium'): Promise<ProjectBenchmarksResponse> => {
+  const { data } = await api.post(`/projects/${id}/benchmark`, {load_profile: loadProfile })
   return data
 }
 

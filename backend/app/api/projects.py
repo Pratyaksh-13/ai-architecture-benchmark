@@ -21,7 +21,8 @@ from app.services.architecture_service import (
     get_architectures_for_project,
 )
 
-from app.schemas.benchmark import BenchmarkResponse, ProjectBenchmarksResponse
+from app.schemas.benchmark import BenchmarkRequest, BenchmarkResponse, ProjectBenchmarksResponse
+
 from app.services.benchmark_service import (
     simulate_benchmarks_for_project,
     get_benchmarks_for_project,
@@ -89,13 +90,19 @@ def list_architectures(project_id: int, db: Session = Depends(get_db)):
     return {"project_id": project_id, "architectures": architectures}
 
 
+
 @router.post("/{project_id}/benchmark", response_model=ProjectBenchmarksResponse)
-def run_benchmark(project_id: int, db: Session = Depends(get_db)):
+def run_benchmark(
+    project_id: int,
+    payload: BenchmarkRequest,
+    db: Session = Depends(get_db)
+):
     """
-    Simulate benchmark metrics for all architectures in a project.
+    Simulate benchmark metrics for all architectures in a project,
+    scaled by the selected load profile (light/medium/heavy, default medium).
     Safe to call multiple times — regenerates fresh metrics each time.
     """
-    benchmarks = simulate_benchmarks_for_project(db, project_id)
+    benchmarks = simulate_benchmarks_for_project(db, project_id, payload.load_profile)
     return {"project_id": project_id, "benchmarks": benchmarks}
 
 

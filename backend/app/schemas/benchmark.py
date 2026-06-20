@@ -2,6 +2,10 @@
 
 from pydantic import BaseModel
 from datetime import datetime
+from typing import Optional, Literal
+
+class BenchmarkRequest(BaseModel):
+    load_profile: Literal["light", "medium", "heavy"] = "medium"
 
 class BenchmarkResponse(BaseModel):
     id: int
@@ -15,6 +19,7 @@ class BenchmarkResponse(BaseModel):
     cpu_usage_pct: float
     memory_usage_mb: float
     simulation_type: str
+    load_profile: str
     created_at: datetime
 
     class Config:

@@ -77,6 +77,7 @@ export default function ProjectDetail() {
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null)
   const [loading, setLoading] = useState(true)
   const [benchmarking, setBenchmarking] = useState(false)
+  const [loadProfile, setLoadProfile] = useState('medium')
   const [recommending, setRecommending] = useState(false)
   const [benchmarkError, setBenchmarkError] = useState('')
   const [recommendError, setRecommendError] = useState('')
@@ -101,7 +102,7 @@ export default function ProjectDetail() {
     setBenchmarking(true)
     setBenchmarkError('')
     try {
-      const result = await runBenchmark(Number(id))
+      const result = await runBenchmark(Number(id), loadProfile)
       setBenchmarks(result.benchmarks)
     } catch {
       setBenchmarkError('Benchmark failed. Please try again.')
@@ -180,6 +181,15 @@ export default function ProjectDetail() {
       {/* Action bar */}
       <div className="flex items-center gap-3 flex-wrap mb-8 pb-6 border-b border-dark-700">
         {/* Run benchmarks */}
+        <select
+        value={loadProfile}
+        onChange={e => setLoadProfile(e.target.value)}
+        className="text-xs bg-dark-800 border border-dark-700 rounded-lg px-2 py-1.5 text-slate-300 focus:outline-none focus:border-accent-purple mr-2"
+       >
+        <option value="light">light load</option>
+  <     option value="medium">medium load</option>
+        <option value="heavy">heavy load</option>
+        </select>
         <button
           onClick={handleBenchmark}
           disabled={benchmarking || architectures.length === 0}

@@ -22,6 +22,8 @@ class Benchmark(Base):
     memory_usage_mb = Column(Float, nullable=False)  # average memory per node
 
     simulation_type = Column(String(20), default="simulated")  # "simulated" | "real"
+    load_profile = Column(String(20), default="medium", nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
 
     architecture = relationship("Architecture", backref="benchmark")
