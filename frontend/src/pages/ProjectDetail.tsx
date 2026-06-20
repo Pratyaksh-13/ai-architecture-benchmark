@@ -1,19 +1,72 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { getProject, getArchitectures, runBenchmark, getBenchmarks } from '../api/client'
+import { useParams, Link } from 'react-router-dom'
+import { getProject, getArchitectures, runBenchmark, getBenchmarks, generateRecommendation, getRecommendation } from '../api/client'
 import ArchitectureCard from '../components/ArchitectureCard'
-import type { Project, Architecture, Benchmark } from '../types'
-import {
-  ResponsiveContainer, Legend, Tooltip,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
-} from 'recharts'
-import { generateRecommendation, getRecommendation } from '../api/client'
-import type { Recommendation } from '../types'
+import BenchmarkCharts from '../components/BenchmarkCharts'
+import StatusBadge from '../components/StatusBadge'
+import { SkeletonCard } from '../components/SkeletonCard'
+import type { Project, Architecture, Benchmark, Recommendation } from '../types'
 
-const ARCH_COLORS: Record<string, string> = {
-  monolithic: '#14b8a6',
-  microservices: '#a78bfa',
-  event_driven: '#f59e0b',
+const ARCH_CONFIG: Record<string, { label: string; color: string }> = {
+  monolithic: { label: 'Monolithic', color: '#14b8a6' },
+  microservices: { label: 'Microservices', color: '#a78bfa' },
+  event_driven: { label: 'Event-Driven', color: '#f59e0b' },
+}
+
+function RecommendationBanner({ rec }: { rec: Recommendation }) {
+  const cfg = ARCH_CONFIG[rec.recommended_arch_type] ?? { label: rec.recommended_arch_type, color: '#a78bfa' }
+  const confidence = Math.round(rec.confidence_score * 100)
+
+  return (
+    <div
+      className="rounded-xl p-5 mb-8 animate-slide-in"
+      style={{
+        background: `linear-gradient(135deg, ${cfg.color}10 0%, #161b27 100%)`,
+        border: `1px solid ${cfg.color}30`,
+      }}
+    >
+      <div className="flex items-start gap-4">
+        {/* Icon */}
+        <div
+          className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
+          style={{ background: cfg.color + '18', border: `1px solid ${cfg.color}30` }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
+              stroke={cfg.color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3 flex-wrap mb-2">
+            <span className="text-[10px] font-bold tracking-widest uppercase text-slate-500">AI Recommendation</span>
+            <span
+              className="text-xs font-bold tracking-wide uppercase px-2.5 py-0.5 rounded-full"
+              style={{ color: cfg.color, background: cfg.color + '18', border: `1px solid ${cfg.color}30` }}
+            >
+              {cfg.label}
+            </span>
+            {/* Confidence bar */}
+            <div className="flex items-center gap-2 ml-auto">
+              <span className="text-xs text-slate-500">Confidence</span>
+              <div className="flex items-center gap-1.5">
+                <div className="w-24 h-1.5 bg-dark-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-700"
+                    style={{ width: `${confidence}%`, background: cfg.color }}
+                  />
+                </div>
+                <span className="text-xs font-bold tabular-nums" style={{ color: cfg.color }}>{confidence}%</span>
+              </div>
+            </div>
+          </div>
+          <p className="text-slate-300 text-sm leading-relaxed">{rec.reasoning}</p>
+          <p className="text-slate-600 text-xs mt-2">via {rec.llm_provider}</p>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function ProjectDetail() {
@@ -21,10 +74,12 @@ export default function ProjectDetail() {
   const [project, setProject] = useState<Project | null>(null)
   const [architectures, setArchitectures] = useState<Architecture[]>([])
   const [benchmarks, setBenchmarks] = useState<Benchmark[]>([])
-  const [benchmarking, setBenchmarking] = useState(false)
-  const [loading, setLoading] = useState(true)
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [benchmarking, setBenchmarking] = useState(false)
   const [recommending, setRecommending] = useState(false)
+  const [benchmarkError, setBenchmarkError] = useState('')
+  const [recommendError, setRecommendError] = useState('')
 
   useEffect(() => {
     if (!id) return
@@ -44,174 +99,194 @@ export default function ProjectDetail() {
   const handleBenchmark = async () => {
     if (!id) return
     setBenchmarking(true)
-    const result = await runBenchmark(Number(id))
-    setBenchmarks(result.benchmarks)
-    setBenchmarking(false)
+    setBenchmarkError('')
+    try {
+      const result = await runBenchmark(Number(id))
+      setBenchmarks(result.benchmarks)
+    } catch {
+      setBenchmarkError('Benchmark failed. Please try again.')
+    } finally {
+      setBenchmarking(false)
+    }
   }
 
   const handleRecommend = async () => {
     if (!id) return
     setRecommending(true)
+    setRecommendError('')
     try {
       const result = await generateRecommendation(Number(id))
       setRecommendation(result)
-    } catch (e) {
-      console.error(e)
+    } catch (e: any) {
+      const status = e?.response?.status
+      if (status === 502 || status === 503) {
+        setRecommendError('The LLM returned an unexpected response. Please try again.')
+      } else {
+        setRecommendError('Failed to generate recommendation. Please try again.')
+      }
     } finally {
       setRecommending(false)
     }
   }
 
-  // Build chart data — one entry per architecture type
-  const latencyData = architectures.map(arch => {
-    const bm = benchmarks.find(b => b.architecture_id === arch.id)
-    return {
-      name: arch.arch_type.replace('_', '-'),
-      p50: bm?.latency_p50_ms ?? 0,
-      p95: bm?.latency_p95_ms ?? 0,
-      p99: bm?.latency_p99_ms ?? 0,
-    }
-  })
+  if (loading) {
+    return (
+      <div className="animate-fade-in">
+        <div className="h-4 w-48 bg-dark-700 rounded skeleton mb-6" />
+        <div className="h-7 w-2/3 bg-dark-700 rounded skeleton mb-3" />
+        <div className="h-5 w-20 bg-dark-700 rounded-full skeleton mb-8" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          {Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)}
+        </div>
+      </div>
+    )
+  }
 
-  const throughputData = architectures.map(arch => {
-    const bm = benchmarks.find(b => b.architecture_id === arch.id)
-    return {
-      name: arch.arch_type.replace('_', '-'),
-      'req/s': bm?.throughput_rps ?? 0,
-    }
-  })
+  if (!project) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24">
+        <p className="text-slate-400 text-sm mb-2">Project not found</p>
+        <Link to="/" className="text-accent-purple_light text-sm hover:underline">← Back to dashboard</Link>
+      </div>
+    )
+  }
 
-  if (loading) return <p className="text-slate-500 text-sm">loading...</p>
-  if (!project) return <p className="text-red-400 text-sm">project not found</p>
+  const hasBenchmarks = benchmarks.length > 0
+  const hasRecommendation = recommendation !== null
 
   return (
-    <div>
+    <div className="animate-fade-in">
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-2 text-xs text-slate-600 mb-5">
+        <Link to="/" className="hover:text-slate-400 transition-colors">Dashboard</Link>
+        <span>/</span>
+        <span className="text-slate-400">Project #{project.id}</span>
+      </div>
+
       {/* Header */}
-      <p className="text-slate-500 text-xs mb-1">project #{project.id}</p>
-      <h1 className="text-xl font-medium text-slate-100 mb-2 max-w-3xl">{project.requirement}</h1>
-      <div className="flex items-center gap-3 mb-8">
-        <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-          project.status === 'done' ? 'bg-teal-900 text-teal-400' : 'bg-blue-950 text-blue-400'
-        }`}>{project.status}</span>
+      <div className="mb-6">
+        <div className="flex items-start justify-between gap-4 mb-3">
+          <h1 className="text-xl font-semibold text-slate-100 leading-snug max-w-3xl">
+            {project.requirement}
+          </h1>
+          <StatusBadge status={project.status} size="md" />
+        </div>
+        <p className="text-slate-600 text-xs">
+          Created {new Date(project.created_at).toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })}
+          {project.updated_at && ` · Updated ${new Date(project.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+        </p>
+      </div>
+
+      {/* Action bar */}
+      <div className="flex items-center gap-3 flex-wrap mb-8 pb-6 border-b border-dark-700">
+        {/* Run benchmarks */}
         <button
           onClick={handleBenchmark}
-          disabled={benchmarking}
-          className="text-xs bg-accent-purple hover:bg-purple-700 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg transition-colors"
+          disabled={benchmarking || architectures.length === 0}
+          className="inline-flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg transition-all duration-150 border disabled:opacity-40 disabled:cursor-not-allowed bg-dark-700 border-dark-600 text-slate-300 hover:border-dark-500 hover:text-slate-200 hover:bg-dark-600"
         >
-          {benchmarking ? 'running benchmarks...' : benchmarks.length > 0 ? '↺ re-run benchmarks' : '▶ run benchmarks'}
+          {benchmarking ? (
+            <>
+              <div className="w-3.5 h-3.5 border-2 border-slate-500 border-t-slate-300 rounded-full animate-spin" />
+              Running benchmarks...
+            </>
+          ) : (
+            <>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path d="M8 1v6l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5"/>
+              </svg>
+              {hasBenchmarks ? 'Re-run Benchmarks' : 'Run Benchmarks'}
+            </>
+          )}
         </button>
-        {benchmarks.length > 0 && (
-          <span className="text-xs text-slate-500">simulated · {new Date(benchmarks[0].created_at).toLocaleString()}</span>
-        )}
-        {benchmarks.length > 0 && (
+
+        {/* Get recommendation — only enabled after benchmarks */}
+        <div className="relative group">
           <button
             onClick={handleRecommend}
-            disabled={recommending}
-            className="text-xs bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg transition-colors"
+            disabled={recommending || !hasBenchmarks}
+            className="inline-flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg transition-all duration-150 border disabled:opacity-40 disabled:cursor-not-allowed bg-accent-purple/15 border-accent-purple/30 text-accent-purple_light hover:bg-accent-purple/25 hover:border-accent-purple/50"
           >
-            {recommending ? 'analyzing...' : recommendation ? '↺ re-analyze' : '✨ get recommendation'}
+            {recommending ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-accent-purple_light/40 border-t-accent-purple_light rounded-full animate-spin" />
+                Analyzing architectures...
+              </>
+            ) : (
+              <>
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 1L9.8 5.8 15 6.3l-3.6 3.5.9 5L8 12.2 3.7 14.8l.9-5L1 6.3l5.2-.5L8 1z"
+                    stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+                </svg>
+                {hasRecommendation ? 'Re-analyze' : 'Get Recommendation'}
+              </>
+            )}
           </button>
+          {/* Tooltip when disabled */}
+          {!hasBenchmarks && (
+            <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-1.5 bg-dark-600 border border-dark-500 rounded-lg text-xs text-slate-400 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+              Run benchmarks first
+            </div>
+          )}
+        </div>
+
+        {/* Benchmark timestamp */}
+        {hasBenchmarks && (
+          <span className="text-xs text-slate-600 ml-1">
+            Benchmarks from {new Date(benchmarks[0].created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          </span>
+        )}
+
+        {/* Errors */}
+        {benchmarkError && (
+          <span className="text-xs text-red-400 flex items-center gap-1">
+            ⚠ {benchmarkError}
+          </span>
+        )}
+        {recommendError && (
+          <span className="text-xs text-red-400 flex items-center gap-1">
+            ⚠ {recommendError}
+          </span>
         )}
       </div>
 
       {/* Recommendation banner */}
       {recommendation && (
-        <div className="bg-gradient-to-r from-amber-950/40 to-dark-800 border border-amber-900/50 rounded-xl p-5 mb-8">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-amber-400 text-xs font-bold tracking-widest uppercase">✨ recommended</span>
-            <span className="text-slate-200 text-sm font-medium">{recommendation.recommended_arch_type.replace('_', '-')}</span>
-            <span className="text-slate-500 text-xs ml-auto">
-              confidence: {(recommendation.confidence_score * 100).toFixed(0)}%
-            </span>
-          </div>
-          <p className="text-slate-400 text-sm leading-relaxed">{recommendation.reasoning}</p>
-        </div>
+        <RecommendationBanner rec={recommendation} />
       )}
 
       {/* Architecture cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-10">
-        {architectures.map(a => (
-          <ArchitectureCard
-            key={a.id}
-            arch={a}
-            isRecommended={recommendation?.recommended_arch_type === a.arch_type}
-          />
-        ))}
-      </div>
-
-      {/* Benchmark charts — only show after benchmarks run */}
-      {benchmarks.length > 0 && (
+      {architectures.length > 0 ? (
         <div>
-          <h2 className="text-base font-medium text-slate-200 mb-5">benchmark results</h2>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
-
-            {/* Latency comparison */}
-            <div className="bg-dark-800 border border-dark-700 rounded-xl p-5">
-              <p className="text-slate-400 text-sm mb-4">latency comparison (ms)</p>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={latencyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e2535" />
-                  <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 12 }} />
-                  <YAxis tick={{ fill: '#64748b', fontSize: 12 }} />
-                  <Tooltip contentStyle={{ background: '#161b27', border: '1px solid #1e2535', borderRadius: 8 }} />
-                  <Legend />
-                  <Bar dataKey="p50" fill="#14b8a6" name="p50" radius={[4,4,0,0]} />
-                  <Bar dataKey="p95" fill="#a78bfa" name="p95" radius={[4,4,0,0]} />
-                  <Bar dataKey="p99" fill="#f59e0b" name="p99" radius={[4,4,0,0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Throughput comparison */}
-            <div className="bg-dark-800 border border-dark-700 rounded-xl p-5">
-              <p className="text-slate-400 text-sm mb-4">throughput (requests/sec)</p>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={throughputData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e2535" />
-                  <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 12 }} />
-                  <YAxis tick={{ fill: '#64748b', fontSize: 12 }} />
-                  <Tooltip contentStyle={{ background: '#161b27', border: '1px solid #1e2535', borderRadius: 8 }} />
-                  <Bar dataKey="req/s" radius={[4,4,0,0]}>
-                    {throughputData.map((entry, index) => (
-                      <rect key={index} fill={Object.values(ARCH_COLORS)[index]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+          <div className="flex items-center gap-3 mb-4">
+            <p className="text-xs font-semibold tracking-widest uppercase text-slate-600">Architecture Proposals</p>
+            <div className="flex-1 h-px bg-dark-700" />
           </div>
-
-          {/* Stats grid */}
-          <div className="grid grid-cols-3 gap-4">
-            {architectures.map(arch => {
-              const bm = benchmarks.find(b => b.architecture_id === arch.id)
-              if (!bm) return null
-              const color = ARCH_COLORS[arch.arch_type] ?? '#64748b'
-              return (
-                <div key={arch.id} className="bg-dark-800 border border-dark-700 rounded-xl p-5">
-                  <p className="text-xs font-bold tracking-widest uppercase mb-4" style={{ color }}>
-                    {arch.arch_type.replace('_', '-')}
-                  </p>
-                  <div className="space-y-3">
-                    {[
-                      { label: 'p99 latency', value: `${bm.latency_p99_ms} ms` },
-                      { label: 'throughput', value: `${bm.throughput_rps.toLocaleString()} req/s` },
-                      { label: 'error rate', value: `${bm.error_rate_pct}%` },
-                      { label: 'cpu usage', value: `${bm.cpu_usage_pct}%` },
-                      { label: 'memory', value: `${bm.memory_usage_mb} MB` },
-                    ].map(({ label, value }) => (
-                      <div key={label} className="flex justify-between text-sm">
-                        <span className="text-slate-500">{label}</span>
-                        <span className="text-slate-200 font-medium">{value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-10">
+            {architectures.map(a => (
+              <ArchitectureCard
+                key={a.id}
+                arch={a}
+                isRecommended={recommendation?.recommended_arch_type === a.arch_type}
+              />
+            ))}
           </div>
         </div>
+      ) : (
+        <div className="bg-dark-800 border border-dark-700 rounded-xl p-8 text-center mb-10">
+          <p className="text-slate-500 text-sm">No architectures generated yet.</p>
+        </div>
+      )}
+
+      {/* Benchmark section */}
+      {hasBenchmarks && (
+        <>
+          <div className="flex items-center gap-3 mb-6">
+            <div className="flex-1 h-px bg-dark-700" />
+          </div>
+          <BenchmarkCharts architectures={architectures} benchmarks={benchmarks} />
+        </>
       )}
     </div>
   )
