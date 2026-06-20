@@ -7,6 +7,15 @@ const api = axios.create({
   baseURL: '/api/v1',
   withCredentials: true,   
 })
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      window.location.href = '/login'
+    }
+    return Promise.reject(error)
+  }
+)
 
 export const createProject = async (requirement: string): Promise<Project> => {
   const { data } = await api.post('/projects/', { requirement })

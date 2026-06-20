@@ -8,6 +8,7 @@ from app.models.architecture import Architecture
 from app.models.benchmark import Benchmark
 from app.services.project_service import get_project_by_id
 from app.services.llm.factory import get_llm_provider
+from app.services.project_service import get_owned_project
 
 RECOMMEND_SYSTEM_PROMPT = """You are a senior software architect evaluating three \
 architecture options against a requirement and their benchmark metrics.
@@ -66,8 +67,8 @@ def _parse_recommendation_json(raw_text: str) -> dict:
     return data
 
 
-def generate_recommendation(db: Session, project_id: int, provider_override: str | None = None) -> Recommendation:
-    project = get_project_by_id(db, project_id)
+def generate_recommendation(db: Session, project_id: int, user_id: int, provider_override: str | None = None) -> Recommendation:
+    project = get_owned_project(db, project_id, user_id)
 
     architectures = db.query(Architecture).filter(Architecture.project_id == project_id).all()
     if not architectures:
@@ -128,8 +129,8 @@ def generate_recommendation(db: Session, project_id: int, provider_override: str
     return recommendation
 
 
-def get_recommendation_for_project(db: Session, project_id: int) -> Recommendation:
-    get_project_by_id(db, project_id)
+def get_recommendation_for_project(db: Session, project_id: int, user_id: int) -> Recommendation:
+    get_owned_project(db, project_id, user_id)  # changed
     rec = db.query(Recommendation).filter(Recommendation.project_id == project_id).first()
     if not rec:
         raise HTTPException(status_code=404, detail="No recommendation generated yet")

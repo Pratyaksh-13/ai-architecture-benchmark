@@ -4,6 +4,9 @@ from sqlalchemy.orm import Session
 from app.models.project import Project
 from app.schemas.project import ProjectCreate
 from fastapi import HTTPException
+# app/services/project_service.py
+
+
 
 def create_project(db: Session, data: ProjectCreate, user_id: int | None = None) -> Project:
     """Create a new project from a user requirement."""
@@ -14,13 +17,18 @@ def create_project(db: Session, data: ProjectCreate, user_id: int | None = None)
     )
     db.add(project)
     db.commit()
-    db.refresh(project)  # Reload from DB to get auto-generated id, created_at etc.
+    db.refresh(project)
     return project
 
 
-def get_all_projects(db: Session) -> list[Project]:
-    """Return all projects, newest first."""
-    return db.query(Project).order_by(Project.created_at.desc()).all()
+def get_all_projects(db: Session, user_id: int) -> list[Project]:
+    """Return all projects belonging to the given user, newest first."""
+    return (
+        db.query(Project)
+        .filter(Project.user_id == user_id)
+        .order_by(Project.created_at.desc())
+        .all()
+    )
 
 
 def get_project_by_id(db: Session, project_id: int) -> Project:
@@ -31,9 +39,22 @@ def get_project_by_id(db: Session, project_id: int) -> Project:
     return project
 
 
-def delete_project(db: Session, project_id: int) -> dict:
-    """Delete a project by ID."""
-    project = get_project_by_id(db, project_id)  # Raises 404 if missing
+def get_owned_project(db: Session, project_id: int, user_id: int) -> Project:
+    """
+    Return a project only if it belongs to the given user.
+    Raises 404 (not 403) if the project exists but belongs to someone else —
+    this avoids leaking whether a given project ID exists at all to non-owners.
+    """
+    project = get_project_by_id(db, project_id)
+    if project.user_id != user_id:
+        raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
+    return project
+
+
+def delete_project(db: Session, project_id: int, user_id: int) -> dict:
+    """Delete a project by ID, only if owned by the given user."""
+    project = get_owned_project(db, project_id, user_id)
     db.delete(project)
     db.commit()
     return {"message": f"Project {project_id} deleted successfully"}
+

@@ -6,17 +6,21 @@ from app.models.architecture import Architecture
 from app.services.llm.factory import get_llm_provider
 from app.services.project_service import get_project_by_id
 
+from app.services.project_service import get_owned_project  # changed import
+
+
 
 def generate_architectures_for_project(
     db: Session,
     project_id: int,
+    user_id: int,     
     provider_override: str | None = None
 ) -> list[Architecture]:
     """
     Calls the LLM to generate 3 architectures for a project's requirement,
     stores them, and returns the saved rows.
     """
-    project = get_project_by_id(db, project_id)  # Raises 404 if missing
+    project = get_owned_project(db, project_id, user_id)
 
     provider_name = provider_override or "claude"
 
@@ -48,7 +52,6 @@ def generate_architectures_for_project(
 
     return saved_architectures
 
-
-def get_architectures_for_project(db: Session, project_id: int) -> list[Architecture]:
-    get_project_by_id(db, project_id)  # Raises 404 if project missing
+def get_architectures_for_project(db: Session, project_id: int, user_id: int) -> list[Architecture]:
+    get_owned_project(db, project_id, user_id)  # changed
     return db.query(Architecture).filter(Architecture.project_id == project_id).all()

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.models.benchmark import Benchmark
 from app.models.architecture import Architecture
 from app.services.project_service import get_project_by_id
+from app.services.project_service import get_owned_project
 
 BENCHMARK_PROFILES = {
     "monolithic": {
@@ -74,6 +75,7 @@ def _simulate_metric(low: float, high: float, multiplier: float) -> float:
 def simulate_benchmarks_for_project(
     db: Session,
     project_id: int,
+    user_id: int,
     load_profile: str = "medium"
 ) -> list[Benchmark]:
     """
@@ -81,7 +83,7 @@ def simulate_benchmarks_for_project(
     scaled by the selected load profile (light/medium/heavy).
     Idempotent — deletes existing benchmarks before regenerating.
     """
-    get_project_by_id(db, project_id)
+    get_owned_project(db, project_id, user_id)
 
     db.query(Benchmark).filter(Benchmark.project_id == project_id).delete()
     db.commit()
@@ -134,10 +136,6 @@ def simulate_benchmarks_for_project(
     return saved
 
 
-def get_benchmarks_for_project(db: Session, project_id: int) -> list[Benchmark]:
-    get_project_by_id(db, project_id)
-    return (
-        db.query(Benchmark)
-        .filter(Benchmark.project_id == project_id)
-        .all()
-    )
+def get_benchmarks_for_project(db: Session, project_id: int, user_id: int) -> list[Benchmark]:
+    get_owned_project(db, project_id, user_id)  # changed
+    return db.query(Benchmark).filter(Benchmark.project_id == project_id).all()
