@@ -89,3 +89,12 @@ export const getCurrentUser = async () => {
   const { data } = await api.get('/auth/me')
   return data
 }
+export const verifyEmail = async (token: string) => {
+  const { data } = await api.get(`/auth/verify?token=${token}`)
+  return data
+}
+
+export const resendVerification = async (email: string) => {
+  const { data } = await api.post('/auth/resend-verification', { email, password: 'unused' })
+  return data
+}

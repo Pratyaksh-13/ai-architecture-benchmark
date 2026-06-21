@@ -7,6 +7,9 @@ import NewProject from './pages/NewProject'
 import ProjectDetail from './pages/ProjectDetail'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
+import VerifyEmail from './pages/VerifyEmail'
+
+
 
 export default function App() {
   return (
@@ -15,6 +18,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
 
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<Dashboard />} />
