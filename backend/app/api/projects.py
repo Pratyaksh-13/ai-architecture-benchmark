@@ -32,6 +32,7 @@ from app.services.recommendation_service import (
     generate_recommendation,
     get_recommendation_for_project,
 )
+from app.services.deployment.orchestrator import run_real_benchmark_for_project, RealBenchmarkError
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
@@ -141,3 +142,23 @@ def get_recommendation(
 ):
     """Fetch the stored recommendation for a project you own."""
     return get_recommendation_for_project(db, project_id, current_user.id)
+
+
+@router.post("/{project_id}/benchmark/real", response_model=ProjectBenchmarksResponse)
+def run_real_benchmark(
+    project_id: int,
+    payload: BenchmarkRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Runs REAL benchmarks: actually deploys, load-tests, and tears down
+    each of the 3 reference architectures via Docker + k6. Takes several
+    minutes — unlike /benchmark, which returns simulated results instantly.
+    """
+    try:
+        benchmarks = run_real_benchmark_for_project(db, project_id, current_user.id, payload.load_profile)
+    except RealBenchmarkError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    return {"project_id": project_id, "benchmarks": benchmarks}
