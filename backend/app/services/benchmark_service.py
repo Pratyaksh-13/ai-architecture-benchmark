@@ -1,10 +1,10 @@
-# app/services/benchmark_service.py
+# app/services/benchmark_service.py — full corrected file
 
 import random
 from sqlalchemy.orm import Session
 from app.models.benchmark import Benchmark
+from app.models.benchmark_run import BenchmarkRun
 from app.models.architecture import Architecture
-from app.services.project_service import get_project_by_id
 from app.services.project_service import get_owned_project
 
 BENCHMARK_PROFILES = {
@@ -37,37 +37,14 @@ BENCHMARK_PROFILES = {
     },
 }
 
-# Multipliers applied on top of base ranges to simulate load conditions.
-# "light" = well under capacity, everything looks great
-# "medium" = baseline, matches the original fixed ranges
-# "heavy" = near/over capacity — latency and errors climb, throughput plateaus
 LOAD_PROFILE_MULTIPLIERS = {
-    "light": {
-        "latency": 0.6,
-        "throughput": 0.5,
-        "error_rate": 0.4,
-        "cpu": 0.6,
-        "memory": 0.8,
-    },
-    "medium": {
-        "latency": 1.0,
-        "throughput": 1.0,
-        "error_rate": 1.0,
-        "cpu": 1.0,
-        "memory": 1.0,
-    },
-    "heavy": {
-        "latency": 1.8,
-        "throughput": 1.4,
-        "error_rate": 3.5,
-        "cpu": 1.3,
-        "memory": 1.25,
-    },
+    "light": {"latency": 0.6, "throughput": 0.5, "error_rate": 0.4, "cpu": 0.6, "memory": 0.8},
+    "medium": {"latency": 1.0, "throughput": 1.0, "error_rate": 1.0, "cpu": 1.0, "memory": 1.0},
+    "heavy": {"latency": 1.8, "throughput": 1.4, "error_rate": 3.5, "cpu": 1.3, "memory": 1.25},
 }
 
 
 def _simulate_metric(low: float, high: float, multiplier: float) -> float:
-    """Generate a realistic metric value with variance, scaled by load profile."""
     base = random.uniform(low, high)
     return round(base * multiplier, 2)
 
@@ -80,13 +57,10 @@ def simulate_benchmarks_for_project(
 ) -> list[Benchmark]:
     """
     Generate simulated benchmark metrics for all architectures in a project,
-    scaled by the selected load profile (light/medium/heavy).
-    Idempotent — deletes existing benchmarks before regenerating.
+    scaled by the selected load profile. Each call creates a NEW BenchmarkRun
+    rather than overwriting previous results — full history is preserved.
     """
     get_owned_project(db, project_id, user_id)
-
-    db.query(Benchmark).filter(Benchmark.project_id == project_id).delete()
-    db.commit()
 
     architectures = (
         db.query(Architecture)
@@ -97,6 +71,11 @@ def simulate_benchmarks_for_project(
     if not architectures:
         return []
 
+    run = BenchmarkRun(project_id=project_id, load_profile=load_profile, simulation_type="simulated")
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+
     mult = LOAD_PROFILE_MULTIPLIERS.get(load_profile, LOAD_PROFILE_MULTIPLIERS["medium"])
 
     saved = []
@@ -105,17 +84,16 @@ def simulate_benchmarks_for_project(
         if not profile:
             continue
 
-        # CPU is capped at 99% — can't realistically exceed full utilization
         cpu_low, cpu_high = profile["cpu_usage_pct"]
         cpu_value = min(_simulate_metric(cpu_low, cpu_high, mult["cpu"]), 99.0)
 
-        # Error rate capped at 25% — even under heavy load this stays bounded for realism
         err_low, err_high = profile["error_rate_pct"]
         err_value = min(_simulate_metric(err_low, err_high, mult["error_rate"]), 25.0)
 
         benchmark = Benchmark(
             architecture_id=arch.id,
             project_id=project_id,
+            run_id=run.id,
             latency_p50_ms=_simulate_metric(*profile["latency_p50_ms"], mult["latency"]),
             latency_p95_ms=_simulate_metric(*profile["latency_p95_ms"], mult["latency"]),
             latency_p99_ms=_simulate_metric(*profile["latency_p99_ms"], mult["latency"]),
@@ -137,5 +115,39 @@ def simulate_benchmarks_for_project(
 
 
 def get_benchmarks_for_project(db: Session, project_id: int, user_id: int) -> list[Benchmark]:
-    get_owned_project(db, project_id, user_id)  # changed
-    return db.query(Benchmark).filter(Benchmark.project_id == project_id).all()
+    """Returns benchmarks from the MOST RECENT run only."""
+    get_owned_project(db, project_id, user_id)
+    latest_run = (
+        db.query(BenchmarkRun)
+        .filter(BenchmarkRun.project_id == project_id)
+        .order_by(BenchmarkRun.created_at.desc())
+        .first()
+    )
+    if not latest_run:
+        return []
+    return (
+        db.query(Benchmark)
+        .filter(Benchmark.run_id == latest_run.id)
+        .all()
+    )
+
+
+def get_benchmark_history(db: Session, project_id: int, user_id: int) -> list[dict]:
+    """Returns ALL past runs for a project, each with its benchmarks — the actual history."""
+    get_owned_project(db, project_id, user_id)
+    runs = (
+        db.query(BenchmarkRun)
+        .filter(BenchmarkRun.project_id == project_id)
+        .order_by(BenchmarkRun.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "run_id": run.id,
+            "load_profile": run.load_profile,
+            "simulation_type": run.simulation_type,
+            "created_at": run.created_at,
+            "benchmarks": run.benchmarks,
+        }
+        for run in runs
+    ]

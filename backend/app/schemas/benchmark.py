@@ -41,3 +41,15 @@ class ScoreBreakdown(BaseModel):
 class ProjectScoresResponse(BaseModel):
     project_id: int
     scores: list[ScoreBreakdown]
+
+
+class BenchmarkRunResponse(BaseModel):
+    run_id: int
+    load_profile: str
+    simulation_type: str
+    created_at: datetime
+    benchmarks: list[BenchmarkResponse]
+
+class ProjectHistoryResponse(BaseModel):
+    project_id: int
+    runs: list[BenchmarkRunResponse]

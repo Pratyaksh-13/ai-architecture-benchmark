@@ -3,6 +3,7 @@
 from sqlalchemy.orm import Session
 
 from app.models.benchmark import Benchmark
+from app.models.benchmark_run import BenchmarkRun
 from app.models.architecture import Architecture
 from app.services.project_service import get_owned_project
 from app.services.deployment.manager import deploy_architecture, teardown_architecture, DeploymentError
@@ -22,7 +23,8 @@ def run_real_benchmark_for_project(
     """
     Runs REAL benchmarks: deploys each of the 3 reference architectures
     (monolith/microservices/event_driven) one at a time, hits it with
-    real k6 traffic, saves results, tears down before moving to the next.
+    real k6 traffic, saves results under a new BenchmarkRun, tears down
+    before moving to the next.
 
     Unlike simulate_benchmarks_for_project(), this doesn't care about the
     project's own generated architectures' docker_compose content (those
@@ -40,9 +42,10 @@ def run_real_benchmark_for_project(
     if not architectures:
         raise RealBenchmarkError("No architectures found for this project — generate them first")
 
-    # Clear any previous benchmarks for this project, same as the simulated flow
-    db.query(Benchmark).filter(Benchmark.project_id == project_id).delete()
+    run = BenchmarkRun(project_id=project_id, load_profile=load_profile, simulation_type="real")
+    db.add(run)
     db.commit()
+    db.refresh(run)
 
     saved = []
 
@@ -52,8 +55,6 @@ def run_real_benchmark_for_project(
         try:
             deployment = deploy_architecture(arch_type)
         except DeploymentError as e:
-            # If one architecture fails to deploy, don't silently skip it —
-            # surface the failure clearly rather than saving fake/partial data
             raise RealBenchmarkError(f"Failed to deploy {arch_type}: {e}")
 
         try:
@@ -67,13 +68,14 @@ def run_real_benchmark_for_project(
         benchmark = Benchmark(
             architecture_id=arch.id,
             project_id=project_id,
+            run_id=run.id,
             latency_p50_ms=metrics["latency_p50_ms"],
             latency_p95_ms=metrics["latency_p95_ms"],
             latency_p99_ms=metrics["latency_p99_ms"],
             throughput_rps=metrics["throughput_rps"],
             error_rate_pct=metrics["error_rate_pct"],
-            cpu_usage_pct=metrics["cpu_usage_pct"] or 0.0,   # nullable DB column would be cleaner, see note below
-            memory_usage_mb=metrics["memory_usage_mb"] or 0.0,
+            cpu_usage_pct=metrics["cpu_usage_pct"],
+            memory_usage_mb=metrics["memory_usage_mb"],
             simulation_type="real",
             load_profile=load_profile,
         )

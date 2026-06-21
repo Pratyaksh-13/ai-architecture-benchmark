@@ -26,4 +26,8 @@ class Benchmark(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
 
+    run_id = Column(Integer, ForeignKey("benchmark_runs.id"), nullable=True)
+    run = relationship("BenchmarkRun", back_populates="benchmarks")
+    
+
     architecture = relationship("Architecture", backref="benchmark")

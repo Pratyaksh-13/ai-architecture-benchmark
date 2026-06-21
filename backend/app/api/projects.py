@@ -37,6 +37,10 @@ from app.services.deployment.orchestrator import run_real_benchmark_for_project,
 from app.services.scoring_service import calculate_scores
 from app.schemas.benchmark import ProjectScoresResponse, ScoreBreakdown
 from app.models.benchmark import Benchmark
+
+
+from app.services.benchmark_service import get_benchmark_history
+from app.schemas.benchmark import ProjectHistoryResponse
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
 
@@ -191,3 +195,16 @@ def get_scores(
         for arch_id, breakdown in score_map.items()
     ]
     return {"project_id": project_id, "scores": scores}
+
+
+
+@router.get("/{project_id}/history", response_model=ProjectHistoryResponse)
+def get_history(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Returns every past benchmark run for a project, newest first."""
+    get_owned_project(db, project_id, current_user.id)
+    runs = get_benchmark_history(db, project_id, current_user.id)
+    return {"project_id": project_id, "runs": runs}
