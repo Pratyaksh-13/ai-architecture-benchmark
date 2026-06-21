@@ -92,12 +92,12 @@ def login(payload: UserLogin, response: Response, db: Session = Depends(get_db))
     access_token = create_access_token(data={"sub": str(user.id)})
 
     response.set_cookie(
-        key=COOKIE_NAME,
-        value=access_token,
-        max_age=COOKIE_MAX_AGE,
-        httponly=True,
-        secure=False,
-        samesite="lax",
+    key=COOKIE_NAME,
+    value=access_token,
+    max_age=COOKIE_MAX_AGE,
+    httponly=True,
+    secure=True,           # changed from False — required for SameSite=None
+    samesite="none",       # changed from "lax" — required for cross-site (Lovable -> your backend)
     )
 
     return {"message": "logged in", "user": {"id": user.id, "email": user.email}}

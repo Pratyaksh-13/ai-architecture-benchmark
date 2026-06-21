@@ -18,8 +18,8 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # exact frontend origin, NOT "*"
-    allow_credentials=True,                    # required for cookies to work cross-origin
+    allow_origin_regex=r"https://.*\.lovable\.app|http://localhost:5173|http://localhost:8080|https://.*\.ngrok-free\.(app|dev)",
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
