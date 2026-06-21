@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
 from app.models.user import User
-from app.schemas.user import UserCreate, UserLogin, UserOut, Token
+from app.schemas.user import UserCreate, UserLogin, UserOut, Token, ResendVerificationRequest
 from app.auth.security import hash_password, verify_password, create_access_token
 from app.auth.dependencies import get_current_user
 from app.auth.email_service import generate_verification_token, send_verification_email
@@ -37,7 +37,12 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
-    send_verification_email(user.email, token)
+    try:
+        send_verification_email(user.email, token)
+    except Exception as e:
+        # User is created either way — log the email failure but don't crash the request.
+        # In production this should trigger an alert; for now, surface a clear message.
+        print(f"WARNING: failed to send verification email to {user.email}: {e}")
 
     return user
 
@@ -63,7 +68,7 @@ def verify_email(token: str, db: Session = Depends(get_db)):
 
 
 @router.post("/resend-verification")
-def resend_verification(payload: UserLogin, db: Session = Depends(get_db)):
+def resend_verification(payload: ResendVerificationRequest, db: Session = Depends(get_db)):
     # reuses UserLogin schema just for the email field — password ignored here
     user = db.query(User).filter(User.email == payload.email).first()
     if not user:

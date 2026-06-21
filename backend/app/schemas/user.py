@@ -11,6 +11,9 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8)
 
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
 
 class UserOut(BaseModel):
     id: int
