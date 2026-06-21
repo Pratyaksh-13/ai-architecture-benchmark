@@ -28,3 +28,16 @@ class BenchmarkResponse(BaseModel):
 class ProjectBenchmarksResponse(BaseModel):
     project_id: int
     benchmarks: list[BenchmarkResponse]
+
+
+class ScoreBreakdown(BaseModel):
+    architecture_id: int
+    latency_score: float
+    throughput_score: float
+    reliability_score: float
+    efficiency_score: float | None
+    overall_score: float
+
+class ProjectScoresResponse(BaseModel):
+    project_id: int
+    scores: list[ScoreBreakdown]

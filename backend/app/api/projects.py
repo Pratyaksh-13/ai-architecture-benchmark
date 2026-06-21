@@ -34,6 +34,9 @@ from app.services.recommendation_service import (
 )
 from app.services.deployment.orchestrator import run_real_benchmark_for_project, RealBenchmarkError
 
+from app.services.scoring_service import calculate_scores
+from app.schemas.benchmark import ProjectScoresResponse, ScoreBreakdown
+from app.models.benchmark import Benchmark
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
 
@@ -162,3 +165,29 @@ def run_real_benchmark(
         raise HTTPException(status_code=502, detail=str(e))
 
     return {"project_id": project_id, "benchmarks": benchmarks}
+
+
+
+@router.get("/{project_id}/scores", response_model=ProjectScoresResponse)
+def get_scores(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Computes relative architecture scores from the project's latest benchmarks."""
+    get_owned_project(db, project_id, current_user.id)
+
+    benchmarks = (
+        db.query(Benchmark)
+        .filter(Benchmark.project_id == project_id)
+        .all()
+    )
+    if not benchmarks:
+        raise HTTPException(status_code=404, detail="No benchmarks found — run a benchmark first")
+
+    score_map = calculate_scores(benchmarks)
+    scores = [
+        ScoreBreakdown(architecture_id=arch_id, **breakdown)
+        for arch_id, breakdown in score_map.items()
+    ]
+    return {"project_id": project_id, "scores": scores}
