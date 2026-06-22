@@ -8,6 +8,7 @@ from app.models.architecture import Architecture
 from app.services.project_service import get_owned_project
 from app.services.deployment.manager import deploy_architecture, teardown_architecture, DeploymentError
 from app.services.deployment.k6_runner import run_k6_benchmark, K6RunError
+from app.services.deployment.resilience_runner import run_resilience_test
 
 
 class RealBenchmarkError(Exception):
@@ -21,16 +22,12 @@ def run_real_benchmark_for_project(
     load_profile: str = "medium",
 ) -> list[Benchmark]:
     """
-    Runs REAL benchmarks: deploys each of the 3 reference architectures
-    (monolith/microservices/event_driven) one at a time, hits it with
-    real k6 traffic, saves results under a new BenchmarkRun, tears down
-    before moving to the next.
-
-    Unlike simulate_benchmarks_for_project(), this doesn't care about the
-    project's own generated architectures' docker_compose content (those
-    reference nonexistent images) — it always benchmarks the same fixed
-    benchmark_apps/ reference implementations, since that's what's
-    actually deployable and real.
+    Runs REAL benchmarks + resilience tests for all 3 architectures:
+    1. Deploy architecture
+    2. Run normal k6 benchmark (measures performance)
+    3. Run resilience test (measures fault tolerance — kill a container mid-run)
+    4. Tear down
+    5. Repeat for next architecture
     """
     project = get_owned_project(db, project_id, user_id)
 
@@ -40,7 +37,7 @@ def run_real_benchmark_for_project(
         .all()
     )
     if not architectures:
-        raise RealBenchmarkError("No architectures found for this project — generate them first")
+        raise RealBenchmarkError("No architectures found — generate first")
 
     run = BenchmarkRun(project_id=project_id, load_profile=load_profile, simulation_type="real")
     db.add(run)
@@ -50,7 +47,7 @@ def run_real_benchmark_for_project(
     saved = []
 
     for arch in architectures:
-        arch_type = arch.arch_type  # "monolithic" | "microservices" | "event_driven"
+        arch_type = arch.arch_type
 
         try:
             deployment = deploy_architecture(arch_type)
@@ -63,6 +60,20 @@ def run_real_benchmark_for_project(
             teardown_architecture(arch_type)
             raise RealBenchmarkError(f"k6 run failed for {arch_type}: {e}")
 
+        # Resilience test runs while containers are still up from the normal benchmark
+        try:
+            run_resilience_test(
+                db=db,
+                arch_type=arch_type,
+                architecture_id=arch.id,
+                project_id=project_id,
+                benchmark_run_id=run.id,
+                base_url=deployment["base_url"],
+            )
+        except Exception as e:
+            print(f"[resilience] WARNING: resilience test failed for {arch_type}, skipping: {e}")
+
+        # Always tear down, even if resilience test failed
         teardown_architecture(arch_type)
 
         benchmark = Benchmark(

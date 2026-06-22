@@ -16,8 +16,8 @@ class BenchmarkResponse(BaseModel):
     latency_p99_ms: float
     throughput_rps: float
     error_rate_pct: float
-    cpu_usage_pct: float
-    memory_usage_mb: float
+    cpu_usage_pct: Optional[float] = None
+    memory_usage_mb: Optional[float] = None
     simulation_type: str
     load_profile: str
     created_at: datetime

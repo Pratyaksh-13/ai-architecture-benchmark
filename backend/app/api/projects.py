@@ -41,6 +41,10 @@ from app.models.benchmark import Benchmark
 
 from app.services.benchmark_service import get_benchmark_history
 from app.schemas.benchmark import ProjectHistoryResponse
+
+from app.models.resilience_result import ResilienceResult
+from app.schemas.resilience import ProjectResilienceResponse, ResilienceResultResponse
+
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
 
@@ -208,3 +212,23 @@ def get_history(
     get_owned_project(db, project_id, current_user.id)
     runs = get_benchmark_history(db, project_id, current_user.id)
     return {"project_id": project_id, "runs": runs}
+
+
+
+@router.get("/{project_id}/resilience", response_model=ProjectResilienceResponse)
+def get_resilience(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Returns resilience test results for a project's latest real benchmark run."""
+    get_owned_project(db, project_id, current_user.id)
+
+    results = (
+        db.query(ResilienceResult)
+        .filter(ResilienceResult.project_id == project_id)
+        .order_by(ResilienceResult.created_at.desc())
+        .all()
+    )
+
+    return {"project_id": project_id, "results": results}
