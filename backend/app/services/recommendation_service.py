@@ -1,126 +1,156 @@
 # app/services/recommendation_service.py
 
-import json
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
+
 from app.models.recommendation import Recommendation
-from app.models.architecture import Architecture
 from app.models.benchmark import Benchmark
-from app.services.project_service import get_project_by_id
-from app.services.llm.factory import get_llm_provider
+from app.models.benchmark_run import BenchmarkRun
+from app.models.architecture import Architecture
 from app.services.project_service import get_owned_project
-
-RECOMMEND_SYSTEM_PROMPT = """You are a senior software architect evaluating three \
-architecture options against a requirement and their benchmark metrics.
-
-Respond with ONLY valid JSON, no markdown fences, no commentary, matching this exact \
-structure:
-
-{
-  "recommended_arch_type": "monolithic" | "microservices" | "event_driven",
-  "reasoning": "2-4 sentences explaining why this architecture best fits the requirement, referencing the specific benchmark numbers",
-  "confidence_score": 0.0 to 1.0
-}
-
-CRITICAL: Your entire response must be the raw JSON object and nothing else. Start \
-with { and end with }.
-"""
+from app.services.scoring_service import calculate_scores
+from app.services.llm.factory import get_llm_provider
 
 
-def _build_context(requirement: str, architectures: list[Architecture], benchmarks: list[Benchmark]) -> str:
-    """Builds the user message with requirement + architecture summaries + benchmark numbers."""
-    lines = [f"Requirement: {requirement}\n"]
+def _get_latest_run_benchmarks(db: Session, project_id: int) -> list[Benchmark]:
+    latest_run = (
+        db.query(BenchmarkRun)
+        .filter(BenchmarkRun.project_id == project_id)
+        .order_by(BenchmarkRun.created_at.desc())
+        .first()
+    )
+    if not latest_run:
+        return []
+    return db.query(Benchmark).filter(Benchmark.run_id == latest_run.id).all()
 
-    for arch in architectures:
-        bm = next((b for b in benchmarks if b.architecture_id == arch.id), None)
-        lines.append(f"\n--- {arch.arch_type} ---")
-        lines.append(f"Explanation: {arch.explanation}")
-        if bm:
-            lines.append(
-                f"Benchmarks: p99 latency={bm.latency_p99_ms}ms, "
-                f"throughput={bm.throughput_rps}rps, "
-                f"error_rate={bm.error_rate_pct}%, "
-                f"cpu={bm.cpu_usage_pct}%, "
-                f"memory={bm.memory_usage_mb}MB"
+
+def _build_data_backed_prompt(
+    requirement: str,
+    winner_arch: Architecture,
+    winner_benchmark: Benchmark,
+    winner_score: dict,
+    all_scores: dict,
+    architectures: list[Architecture],
+) -> str:
+    """
+    The winner is already decided by calculate_scores() before this prompt
+    is built. The LLM's only job is to explain WHY, citing actual numbers.
+    """
+    arch_lookup = {a.id: a for a in architectures}
+
+    comparison_lines = []
+    for arch_id, score in all_scores.items():
+        arch = arch_lookup.get(arch_id)
+        if arch:
+            comparison_lines.append(
+                f"- {arch.arch_type}: overall score {score['overall_score']}/100 "
+                f"(latency score {score['latency_score']}, "
+                f"throughput score {score['throughput_score']}, "
+                f"reliability score {score['reliability_score']})"
             )
 
-    return "\n".join(lines)
+    return f"""A user requested this system: "{requirement}"
+
+Three architectures were benchmarked. Based on measured performance data, {winner_arch.arch_type} scored highest overall ({winner_score['overall_score']}/100).
+
+Full comparison:
+{chr(10).join(comparison_lines)}
+
+Winning architecture measured metrics:
+- p95 latency: {winner_benchmark.latency_p95_ms}ms
+- p99 latency: {winner_benchmark.latency_p99_ms}ms
+- Throughput: {winner_benchmark.throughput_rps} req/s
+- Error rate: {winner_benchmark.error_rate_pct}%
+
+Write 2-4 sentences explaining why {winner_arch.arch_type} is the right choice for THIS specific requirement, citing the actual numbers above. Do not suggest a different architecture — the winner is already determined by the data. Focus on connecting the measured performance to what the user actually asked for.
+
+Respond with ONLY the explanation text, no preamble, no JSON, no markdown."""
 
 
-def _parse_recommendation_json(raw_text: str) -> dict:
-    raw_text = raw_text.strip()
-    if raw_text.startswith("```"):
-        raw_text = raw_text.strip("`")
-        if raw_text.startswith("json"):
-            raw_text = raw_text[4:]
-        raw_text = raw_text.strip()
-
-    try:
-        data = json.loads(raw_text)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"LLM did not return valid JSON: {e}\nRaw: {raw_text[:500]}")
-
-    required_keys = {"recommended_arch_type", "reasoning", "confidence_score"}
-    if not required_keys.issubset(data.keys()):
-        raise ValueError(f"Missing required keys. Got: {list(data.keys())}")
-
-    return data
-
-
-def generate_recommendation(db: Session, project_id: int, user_id: int, provider_override: str | None = None) -> Recommendation:
+def generate_recommendation(
+    db: Session,
+    project_id: int,
+    user_id: int,
+    provider_override: str | None = None,
+) -> Recommendation:
+    """
+    Determines the winning architecture from real benchmark scores FIRST
+    (deterministic, from calculate_scores()), then asks the LLM only to
+    explain the already-determined result in plain language, citing real
+    numbers. The LLM cannot pick the wrong winner because it doesn't pick.
+    """
     project = get_owned_project(db, project_id, user_id)
 
-    architectures = db.query(Architecture).filter(Architecture.project_id == project_id).all()
-    if not architectures:
-        raise HTTPException(status_code=400, detail="No architectures found. Generate architectures first.")
-
-    benchmarks = db.query(Benchmark).filter(Benchmark.project_id == project_id).all()
+    benchmarks = _get_latest_run_benchmarks(db, project_id)
     if not benchmarks:
-        raise HTTPException(status_code=400, detail="No benchmarks found. Run benchmarks first.")
+        raise HTTPException(status_code=400, detail="No benchmarks found — run a benchmark first")
 
-    provider_name = provider_override or "claude"
-    context = _build_context(project.requirement, architectures, benchmarks)
+    architectures = (
+        db.query(Architecture)
+        .filter(Architecture.project_id == project_id)
+        .all()
+    )
+    if not architectures:
+        raise HTTPException(status_code=400, detail="No architectures found — generate first")
+
+    arch_lookup = {a.id: a for a in architectures}
+
+    scores = calculate_scores(benchmarks)
+    if not scores:
+        raise HTTPException(status_code=400, detail="Could not compute scores from benchmarks")
+
+    # Winner decided here in code, not by the LLM
+    winner_arch_id = max(scores, key=lambda aid: scores[aid]["overall_score"])
+    winner_score = scores[winner_arch_id]
+    winner_arch = arch_lookup[winner_arch_id]
+    winner_benchmark = next(b for b in benchmarks if b.architecture_id == winner_arch_id)
+
+    prompt = _build_data_backed_prompt(
+        project.requirement, winner_arch, winner_benchmark, winner_score, scores, architectures
+    )
 
     try:
         llm = get_llm_provider(provider_override)
 
-        # Reuse the provider's underlying client directly for a single-object response
-        # (architectures call expects a list of 3; recommendation expects 1 object)
         if hasattr(llm, "client") and hasattr(llm.client, "messages"):
             # Claude-style client
             response = llm.client.messages.create(
                 model="claude-sonnet-4-6",
-                max_tokens=1000,
-                system=RECOMMEND_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": context}],
+                max_tokens=500,
+                messages=[{"role": "user", "content": prompt}],
             )
-            raw_text = response.content[0].text
+            reasoning = response.content[0].text.strip()
         else:
             # OpenAI-style client (also covers OpenRouter)
             response = llm.client.chat.completions.create(
                 model=llm.model,
-                max_tokens=1000,
-                messages=[
-                    {"role": "system", "content": RECOMMEND_SYSTEM_PROMPT},
-                    {"role": "user", "content": context},
-                ],
+                max_tokens=500,
+                messages=[{"role": "user", "content": prompt}],
             )
-            raw_text = response.choices[0].message.content
+            reasoning = response.choices[0].message.content.strip()
 
-        data = _parse_recommendation_json(raw_text)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"LLM explanation failed: {str(e)}")
 
-    except (ValueError, AttributeError) as e:
-        raise HTTPException(status_code=502, detail=f"Recommendation generation failed: {str(e)}")
+    # Confidence score derived from actual margin between winner and runner-up,
+    # not an LLM-guessed number — a 95-vs-40 win is genuinely more confident
+    # than a 95-vs-91 win
+    sorted_scores = sorted(scores.values(), key=lambda s: s["overall_score"], reverse=True)
+    if len(sorted_scores) > 1:
+        margin = sorted_scores[0]["overall_score"] - sorted_scores[1]["overall_score"]
+        confidence = round(min(0.5 + (margin / 100), 0.99), 2)
+    else:
+        confidence = 0.75
 
     # Replace any existing recommendation for this project
     db.query(Recommendation).filter(Recommendation.project_id == project_id).delete()
 
     recommendation = Recommendation(
         project_id=project_id,
-        recommended_arch_type=data["recommended_arch_type"],
-        reasoning=data["reasoning"],
-        confidence_score=float(data["confidence_score"]),
-        llm_provider=provider_name,
+        recommended_arch_type=winner_arch.arch_type,
+        reasoning=reasoning,
+        confidence_score=confidence,
+        llm_provider=provider_override or "default",
     )
     db.add(recommendation)
     db.commit()
@@ -130,7 +160,7 @@ def generate_recommendation(db: Session, project_id: int, user_id: int, provider
 
 
 def get_recommendation_for_project(db: Session, project_id: int, user_id: int) -> Recommendation:
-    get_owned_project(db, project_id, user_id)  # changed
+    get_owned_project(db, project_id, user_id)
     rec = db.query(Recommendation).filter(Recommendation.project_id == project_id).first()
     if not rec:
         raise HTTPException(status_code=404, detail="No recommendation generated yet")
