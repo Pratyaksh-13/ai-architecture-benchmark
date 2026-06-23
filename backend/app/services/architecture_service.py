@@ -22,7 +22,7 @@ def generate_architectures_for_project(
     """
     project = get_owned_project(db, project_id, user_id)
 
-    provider_name = provider_override or "claude"
+    provider_name = provider_override or "openai"
 
     try:
         llm = get_llm_provider(provider_override)

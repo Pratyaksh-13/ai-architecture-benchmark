@@ -8,6 +8,7 @@ from app.models import project, architecture, benchmark, recommendation, user
 from app.api import projects
 from app.auth.router import router as auth_router
 from app.models import project, architecture, benchmark, benchmark_run, recommendation, user, resilience_result
+from app.worker import tasks
 
 Base.metadata.create_all(bind=engine)
 

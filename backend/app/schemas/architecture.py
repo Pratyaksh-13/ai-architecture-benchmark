@@ -19,7 +19,7 @@ class ArchitectureResponse(BaseModel):
         from_attributes = True
 
 class GenerateRequest(BaseModel):
-    provider: Optional[str] = None  # "claude" | "openai" — overrides .env default if set
+    provider: Optional[str] = None  
 
 class GenerateResponse(BaseModel):
     project_id: int

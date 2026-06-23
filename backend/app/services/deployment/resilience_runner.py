@@ -44,7 +44,7 @@ def _run_k6_phase(script_name: str, base_url: str) -> dict:
         result = subprocess.run(
             ["k6", "run", "-e", f"BASE_URL={base_url}",
              f"--summary-export={summary_path}", str(script_path)],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True, text=True, timeout=90,
         )
         with open(summary_path) as f:
             summary = json.load(f)

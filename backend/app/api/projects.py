@@ -45,6 +45,15 @@ from app.schemas.benchmark import ProjectHistoryResponse
 from app.models.resilience_result import ResilienceResult
 from app.schemas.resilience import ProjectResilienceResponse, ResilienceResultResponse
 
+from fastapi.responses import Response, PlainTextResponse
+from app.services.report_service import generate_markdown_report, generate_pdf_report
+
+
+from app.worker.tasks import run_real_benchmark_task
+from app.worker.celery_app import celery_app
+from celery.result import AsyncResult
+from app.schemas.job import JobSubmittedResponse, JobStatusResponse
+
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
 
@@ -232,3 +241,96 @@ def get_resilience(
     )
 
     return {"project_id": project_id, "results": results}
+
+
+
+
+@router.get("/{project_id}/report/markdown")
+def download_markdown_report(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Download a complete Markdown report for this project."""
+    content = generate_markdown_report(db, project_id, current_user.id)
+    return Response(
+        content=content,
+        media_type="text/markdown",
+        headers={
+            "Content-Disposition": f"attachment; filename=archbench-report-{project_id}.md"
+        }
+    )
+
+
+@router.get("/{project_id}/report/pdf")
+def download_pdf_report(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Download a styled PDF report for this project."""
+    pdf_bytes = generate_pdf_report(db, project_id, current_user.id)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=archbench-report-{project_id}.pdf"
+        }
+    )
+
+
+
+@router.post("/{project_id}/benchmark/real/async", response_model=JobSubmittedResponse)
+def run_real_benchmark_async(
+    project_id: int,
+    payload: BenchmarkRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Submits a real benchmark job to the queue and returns immediately
+    with a job_id. Poll GET /jobs/{job_id} for status and results.
+    Unlike /benchmark/real, this does not block for 5-10 minutes.
+    """
+    get_owned_project(db, project_id, current_user.id)
+
+    task = run_real_benchmark_task.delay(
+        project_id=project_id,
+        user_id=current_user.id,
+        load_profile=payload.load_profile,
+    )
+
+    return JobSubmittedResponse(
+        job_id=task.id,
+        status="queued",
+        message=f"Benchmark job queued. Poll GET /api/v1/jobs/{task.id} for status.",
+    )
+
+
+@router.get("/jobs/{job_id}", response_model=JobStatusResponse)
+def get_job_status(job_id: str):
+    """Check the status of a queued benchmark job."""
+    result = AsyncResult(job_id, app=celery_app)
+
+    if result.state == "PENDING":
+        return JobStatusResponse(job_id=job_id, status="pending")
+    elif result.state == "STARTED":
+        return JobStatusResponse(
+            job_id=job_id,
+            status="running",
+            meta=result.info,
+        )
+    elif result.state == "SUCCESS":
+        return JobStatusResponse(
+            job_id=job_id,
+            status="complete",
+            result=result.result,
+        )
+    elif result.state == "FAILURE":
+        return JobStatusResponse(
+            job_id=job_id,
+            status="failed",
+            error=str(result.result),
+        )
+    else:
+        return JobStatusResponse(job_id=job_id, status=result.state.lower())

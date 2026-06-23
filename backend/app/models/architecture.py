@@ -17,7 +17,7 @@ class Architecture(Base):
     docker_compose = Column(Text, nullable=True)
     tradeoffs = Column(JSON, nullable=True)               # {"pros": [...], "cons": [...]}
 
-    llm_provider = Column(String(20), nullable=False)     # "claude" | "openai"
+    llm_provider = Column(String(20), nullable=False)     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     project = relationship("Project", backref="architectures")
