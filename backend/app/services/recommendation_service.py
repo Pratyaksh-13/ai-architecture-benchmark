@@ -115,7 +115,7 @@ def generate_recommendation(
         if hasattr(llm, "client") and hasattr(llm.client, "messages"):
             # Claude-style client
             response = llm.client.messages.create(
-                model="claude-sonnet-4-6",
+                model=getattr(llm, "model", "claude-sonnet-4-6"),
                 max_tokens=500,
                 messages=[{"role": "user", "content": prompt}],
             )
