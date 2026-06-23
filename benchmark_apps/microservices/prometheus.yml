@@ -1,0 +1,12 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: 'shortener-service'
+    static_configs:
+      - targets: ['shortener-service:8000']
+    metrics_path: '/metrics'
+  - job_name: 'redirect-service'
+    static_configs:
+      - targets: ['redirect-service:8000']
+    metrics_path: '/metrics'

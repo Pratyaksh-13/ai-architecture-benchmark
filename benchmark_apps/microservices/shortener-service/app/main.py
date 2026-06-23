@@ -6,11 +6,16 @@ from sqlalchemy.exc import IntegrityError
 
 from app.database import Base, engine, get_db
 from app.models import ShortUrl
+from prometheus_fastapi_instrumentator import Instrumentator
 from app.schemas import ShortenRequest, ShortenResponse, StatsResponse, ResolveResponse
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="URL Shortener — Shortener Service")
+Instrumentator().instrument(app).expose(app)
+from prometheus_fastapi_instrumentator import Instrumentator
+
+Instrumentator().instrument(app).expose(app)
 
 ALPHABET = string.ascii_letters + string.digits
 CODE_LENGTH = 6

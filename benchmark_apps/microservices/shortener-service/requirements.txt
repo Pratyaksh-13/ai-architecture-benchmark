@@ -3,3 +3,5 @@ uvicorn[standard]==0.32.0
 sqlalchemy==2.0.36
 psycopg2-binary==2.9.10
 pydantic[email]==2.9.2
+prometheus-fastapi-instrumentator==6.1.0
+prometheus-fastapi-instrumentator==6.1.0

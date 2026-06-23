@@ -1,0 +1,36 @@
+{
+  "title": "ArchBench — Monolith Performance",
+  "uid": "archbench-monolith",
+  "panels": [
+    {
+      "title": "Request Rate (req/s)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 1,
+      "targets": [{"expr": "rate(http_requests_total[30s])", "legendFormat": "{{method}} {{handler}}"}]
+    },
+    {
+      "title": "Latency p95 (ms)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 2,
+      "targets": [{"expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[30s])) * 1000", "legendFormat": "p95 {{handler}}"}]
+    },
+    {
+      "title": "Error Rate (%)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 3,
+      "targets": [{"expr": "rate(http_requests_total{status=~'5..'}[30s]) / rate(http_requests_total[30s]) * 100", "legendFormat": "error rate"}]
+    },
+    {
+      "title": "Active Requests",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 12, "x": 12, "y": 8},
+      "id": 4,
+      "targets": [{"expr": "http_requests_in_progress", "legendFormat": "in flight"}]
+    }
+  ],
+  "schemaVersion": 36,
+  "version": 1
+}

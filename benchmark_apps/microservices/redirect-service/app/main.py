@@ -3,7 +3,12 @@ import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import RedirectResponse
 
+from prometheus_fastapi_instrumentator import Instrumentator
 app = FastAPI(title="URL Shortener — Redirect Service")
+Instrumentator().instrument(app).expose(app)
+from prometheus_fastapi_instrumentator import Instrumentator
+
+Instrumentator().instrument(app).expose(app)
 
 SHORTENER_SERVICE_URL = os.getenv("SHORTENER_SERVICE_URL", "http://shortener-service:8000")
 

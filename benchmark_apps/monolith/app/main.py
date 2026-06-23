@@ -3,6 +3,8 @@ import string
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from fastapi.responses import RedirectResponse
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.database import Base, engine, get_db
 from app.models import ShortUrl
@@ -11,6 +13,7 @@ from app.schemas import ShortenRequest, ShortenResponse, StatsResponse
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="URL Shortener — Monolith Architecture")
+Instrumentator().instrument(app).expose(app)
 
 ALPHABET = string.ascii_letters + string.digits
 CODE_LENGTH = 6
@@ -28,11 +31,6 @@ def health():
 
 @app.post("/shorten", response_model=ShortenResponse, status_code=201)
 def shorten(payload: ShortenRequest, db: Session = Depends(get_db)):
-    """
-    Generates a unique short code with collision-resistant retry logic.
-    Relies on the DB's unique constraint as the source of truth — avoids
-    a read-then-write race condition between concurrent requests.
-    """
     for _ in range(MAX_GENERATION_ATTEMPTS):
         code = generate_code()
         entry = ShortUrl(code=code, original_url=str(payload.url))
@@ -47,8 +45,7 @@ def shorten(payload: ShortenRequest, db: Session = Depends(get_db)):
             )
         except IntegrityError:
             db.rollback()
-            continue  # collision — try a new code
-
+            continue
     raise HTTPException(status_code=503, detail="Could not generate a unique code, try again")
 
 
@@ -57,11 +54,8 @@ def redirect(code: str, db: Session = Depends(get_db)):
     entry = db.query(ShortUrl).filter(ShortUrl.code == code).first()
     if not entry:
         raise HTTPException(status_code=404, detail="Short URL not found")
-
     entry.click_count += 1
     db.commit()
-
-    from fastapi.responses import RedirectResponse
     return RedirectResponse(url=entry.original_url, status_code=307)
 
 

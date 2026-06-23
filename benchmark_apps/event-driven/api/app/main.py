@@ -12,7 +12,12 @@ from app.events import publish_click_event
 
 Base.metadata.create_all(bind=engine)
 
+from prometheus_fastapi_instrumentator import Instrumentator
 app = FastAPI(title="URL Shortener — Event-Driven")
+Instrumentator().instrument(app).expose(app)
+from prometheus_fastapi_instrumentator import Instrumentator
+
+Instrumentator().instrument(app).expose(app)
 
 ALPHABET = string.ascii_letters + string.digits
 CODE_LENGTH = 6

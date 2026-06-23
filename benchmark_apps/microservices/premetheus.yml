@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: 'monolith'
+    static_configs:
+      - targets: ['shortener-service:8000', 'redirect-service:8000']
+    metrics_path: '/metrics'
