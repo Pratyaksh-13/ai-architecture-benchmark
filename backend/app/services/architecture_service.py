@@ -21,8 +21,14 @@ def generate_architectures_for_project(
     stores them, and returns the saved rows.
     """
     project = get_owned_project(db, project_id, user_id)
+    # Delete existing before generating fresh
+    existing = db.query(Architecture).filter(Architecture.project_id == project_id).all()
+    for arch in existing:
+        db.delete(arch)
+    db.commit()
 
     provider_name = provider_override or "openai"
+    
 
     try:
         llm = get_llm_provider(provider_override)

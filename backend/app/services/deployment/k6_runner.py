@@ -76,7 +76,7 @@ def _parse_k6_summary(summary: dict) -> dict:
         "latency_p95_ms": round(duration["p(95)"], 2),
         "latency_p99_ms": round(duration["p(99)"], 2),
         "throughput_rps": round(reqs["rate"], 2),
-        "error_rate_pct": round(failed["value"] * 100, 2),
+        "error_rate_pct": round((metrics.get("checks", {}).get("fails", 0) / max(metrics.get("checks", {}).get("passes", 0) + metrics.get("checks", {}).get("fails", 0), 1)) * 100, 2),
         # k6 doesn't measure container-level CPU/memory directly — that
         # would require a separate `docker stats` poller running alongside
         # the load test. Documented as a known limitation for now.

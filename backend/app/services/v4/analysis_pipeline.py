@@ -50,6 +50,8 @@ def run_full_analysis(
     db.query(BottleneckFinding).filter(BottleneckFinding.project_id == project_id).delete()
     db.query(CostEstimate).filter(CostEstimate.project_id == project_id).delete()
     db.query(OptimizationRecommendation).filter(OptimizationRecommendation.project_id == project_id).delete()
+    from app.models.architecture_evolution import ArchitectureEvolution
+    db.query(ArchitectureEvolution).filter(ArchitectureEvolution.project_id == project_id).delete()
     db.commit()
 
     results = {
@@ -81,20 +83,26 @@ def run_full_analysis(
             db.add(finding)
         results["bottlenecks"].extend(findings)
 
-        # 2. Optimization recommendations
+        # 2. Optimization recommendations (deduplicated by title across architectures)
         optimizations = generate_optimization_recommendations(bm, findings)
+        saved_titles = {r.title for r in db.query(OptimizationRecommendation).filter(
+            OptimizationRecommendation.project_id == project_id,
+            OptimizationRecommendation.benchmark_run_id == latest_run.id,
+        ).all()}
         for opt in optimizations:
-            rec = OptimizationRecommendation(
-                project_id=project_id,
-                benchmark_run_id=latest_run.id,
-                recommendation_type=opt["recommendation_type"],
-                priority=opt["priority"],
-                title=opt["title"],
-                description=opt["description"],
-                expected_improvement=opt["expected_improvement"],
-                evidence_metrics=opt["evidence_metrics"],
-            )
-            db.add(rec)
+            if opt["title"] not in saved_titles:
+                rec = OptimizationRecommendation(
+                    project_id=project_id,
+                    benchmark_run_id=latest_run.id,
+                    recommendation_type=opt["recommendation_type"],
+                    priority=opt["priority"],
+                    title=opt["title"],
+                    description=opt["description"],
+                    expected_improvement=opt["expected_improvement"],
+                    evidence_metrics=opt["evidence_metrics"],
+                )
+                db.add(rec)
+                saved_titles.add(opt["title"])
         results["optimizations"].extend(optimizations)
 
         # 3. Cost estimation

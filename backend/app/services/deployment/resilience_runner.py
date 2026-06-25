@@ -65,7 +65,7 @@ def _extract_metrics(summary: dict) -> dict:
         "latency_p95_ms": round(duration.get("p(95)", 0), 2),
         "latency_p99_ms": round(duration.get("p(99)", 0), 2),
         "throughput_rps": round(reqs.get("rate", 0), 2),
-        "error_rate_pct": round(failed.get("value", 0) * 100, 2),
+        "error_rate_pct": round((metrics.get("checks", {}).get("fails", 0) / max(metrics.get("checks", {}).get("passes", 0) + metrics.get("checks", {}).get("fails", 0), 1)) * 100, 2),
     }
 
 
@@ -176,8 +176,11 @@ def run_resilience_test(
     if not config:
         raise ValueError(f"No failure config for arch_type: {arch_type}")
 
+    # Brief warmup — health endpoint passes before worker/DB connections are fully ready
+    time.sleep(10)
     print(f"[resilience] Running pre-failure phase for {arch_type}...")
     pre_summary = _run_k6_phase("pre_failure.js", base_url)
+    print(f"[resilience] pre-failure checks: {pre_summary['metrics'].get('checks', {})}, http_reqs: {pre_summary['metrics'].get('http_reqs', {})}")
     pre_metrics = _extract_metrics(pre_summary)
 
     # Find and kill the target container
@@ -202,8 +205,8 @@ def run_resilience_test(
         + failure_summary["metrics"].get("http_reqs", {}).get("count", 0)
     )
     total_failed = (
-        pre_summary["metrics"].get("http_req_failed", {}).get("fails", 0)
-        + failure_summary["metrics"].get("http_req_failed", {}).get("fails", 0)
+        pre_summary["metrics"].get("checks", {}).get("fails", 0)
+        + failure_summary["metrics"].get("checks", {}).get("fails", 0)
     )
     availability_pct = round(
         ((total_requests - total_failed) / total_requests * 100) if total_requests > 0 else 0,

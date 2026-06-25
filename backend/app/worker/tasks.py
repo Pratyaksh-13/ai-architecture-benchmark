@@ -41,11 +41,11 @@ def run_real_benchmark_task(self, project_id: int, user_id: int, load_profile: s
 
     except RealBenchmarkError as e:
         self.update_state(state="FAILURE", meta={"status": "failed", "error": str(e)})
-        raise
+        return {"status": "failed", "error": str(e)}
 
     except Exception as e:
         self.update_state(state="FAILURE", meta={"status": "failed", "error": str(e)})
-        raise
+        return {"status": "failed", "error": str(e)}
 
     finally:
         db.close()

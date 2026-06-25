@@ -37,7 +37,7 @@ def project_capacity(
     projected_memory = round(benchmark.memory_usage_mb * growth_ratio * 0.6, 2) if benchmark.memory_usage_mb else None
 
     bottlenecks = []
-    if projected_cpu > 85:
+    if projected_cpu is not None and projected_cpu> 85:
         bottlenecks.append(
             f"CPU will saturate at ~{projected_cpu}% — horizontal scaling required before reaching {expected_users} users"
         )
@@ -72,7 +72,7 @@ def _scaling_recommendation(arch_type: str, ratio: float, projected_cpu: float) 
             "Consider migrating read-heavy paths to a dedicated service, adding read replicas, "
             "or introducing a caching layer before reaching this scale."
         )
-    elif arch_type == "microservices" and projected_cpu > 85:
+    elif arch_type == "microservices" and projected_cpu is not None and projected_cpu > 85:
         return (
             "Scale CPU-bound services independently via horizontal pod autoscaling. "
             "Identify the bottleneck service using per-service Prometheus metrics."

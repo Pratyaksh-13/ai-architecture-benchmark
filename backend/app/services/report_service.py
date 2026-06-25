@@ -10,7 +10,11 @@ from app.models.recommendation import Recommendation
 from app.models.resilience_result import ResilienceResult
 from app.services.project_service import get_owned_project
 from app.services.scoring_service import calculate_scores
-
+from app.models.bottleneck_finding import BottleneckFinding
+from app.models.capacity_projection import CapacityProjection
+from app.models.cost_estimate import CostEstimate
+from app.models.optimization_recommendation import OptimizationRecommendation
+from app.models.architecture_evolution import ArchitectureEvolution
 
 def _get_latest_benchmarks(db: Session, project_id: int) -> list[Benchmark]:
     latest_run = (
@@ -25,24 +29,47 @@ def _get_latest_benchmarks(db: Session, project_id: int) -> list[Benchmark]:
 
 
 def generate_markdown_report(db: Session, project_id: int, user_id: int) -> str:
-    """
-    Generates a complete Markdown report for a project — requirement,
-    architecture summaries, benchmark comparison, resilience results,
-    scoring breakdown, and AI recommendation.
-    """
     project = get_owned_project(db, project_id, user_id)
 
-    architectures = (
-        db.query(Architecture)
-        .filter(Architecture.project_id == project_id)
-        .all()
-    )
-
+    architectures = db.query(Architecture).filter(Architecture.project_id == project_id).all()
     benchmarks = _get_latest_benchmarks(db, project_id)
     bm_lookup = {b.architecture_id: b for b in benchmarks}
-
     scores = calculate_scores(benchmarks) if benchmarks else {}
 
+    recommendation = db.query(Recommendation).filter(Recommendation.project_id == project_id).first()
+
+    # V4 data
+    bottlenecks = (
+        db.query(BottleneckFinding)
+        .filter(BottleneckFinding.project_id == project_id)
+        .order_by(BottleneckFinding.created_at.desc())
+        .all()
+    )
+    projections = (
+        db.query(CapacityProjection)
+        .filter(CapacityProjection.project_id == project_id)
+        .order_by(CapacityProjection.created_at.desc())
+        .limit(3)
+        .all()
+    )
+    costs = (
+        db.query(CostEstimate)
+        .filter(CostEstimate.project_id == project_id)
+        .order_by(CostEstimate.created_at.desc())
+        .all()
+    )
+    optimizations = (
+        db.query(OptimizationRecommendation)
+        .filter(OptimizationRecommendation.project_id == project_id)
+        .order_by(OptimizationRecommendation.created_at.desc())
+        .all()
+    )
+    evolution = (
+        db.query(ArchitectureEvolution)
+        .filter(ArchitectureEvolution.project_id == project_id)
+        .order_by(ArchitectureEvolution.created_at.asc())
+        .all()
+    )
     resilience_results = (
         db.query(ResilienceResult)
         .filter(ResilienceResult.project_id == project_id)
@@ -52,23 +79,17 @@ def generate_markdown_report(db: Session, project_id: int, user_id: int) -> str:
     )
     res_lookup = {r.architecture_id: r for r in resilience_results}
 
-    recommendation = (
-        db.query(Recommendation)
-        .filter(Recommendation.project_id == project_id)
-        .first()
-    )
-
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     lines = []
 
     # Header
     lines += [
-        "# ArchBench Architecture Report",
-        f"",
+        "# ArchBench Architecture Decision Report",
+        "",
         f"**Generated:** {now}  ",
         f"**Project ID:** {project_id}  ",
         f"**Status:** {project.status}  ",
-        f"",
+        "",
         "---",
         "",
         "## Requirement",
@@ -79,7 +100,7 @@ def generate_markdown_report(db: Session, project_id: int, user_id: int) -> str:
         "",
     ]
 
-    # Architecture summaries
+    # Architecture Summaries
     lines += ["## Architecture Summaries", ""]
     for arch in architectures:
         score = scores.get(arch.id, {})
@@ -99,13 +120,12 @@ def generate_markdown_report(db: Session, project_id: int, user_id: int) -> str:
                 lines.append("**Pros:**")
                 lines += [f"- {p}" for p in pros]
             if cons:
-                lines.append("")
-                lines.append("**Cons:**")
+                lines += ["", "**Cons:**"]
                 lines += [f"- {c}" for c in cons]
         lines.append("")
 
+    # Benchmark Comparison
     lines += ["---", "", "## Benchmark Comparison", ""]
-
     if benchmarks:
         latest_run = (
             db.query(BenchmarkRun)
@@ -121,25 +141,19 @@ def generate_markdown_report(db: Session, project_id: int, user_id: int) -> str:
                 "",
             ]
 
-        # Benchmark table
         lines += [
-            "| Metric | " + " | ".join(
-                arch.arch_type.replace("_", " ").title() for arch in architectures
-            ) + " |",
+            "| Metric | " + " | ".join(a.arch_type.replace("_"," ").title() for a in architectures) + " |",
             "|--------|" + "|".join("--------|" for _ in architectures),
         ]
-
-        metrics = [
+        for label, field in [
             ("p50 Latency (ms)", "latency_p50_ms"),
             ("p95 Latency (ms)", "latency_p95_ms"),
             ("p99 Latency (ms)", "latency_p99_ms"),
             ("Throughput (req/s)", "throughput_rps"),
             ("Error Rate (%)", "error_rate_pct"),
-            ("CPU Usage (%)", "cpu_usage_pct"),
+            ("CPU (%)", "cpu_usage_pct"),
             ("Memory (MB)", "memory_usage_mb"),
-        ]
-
-        for label, field in metrics:
+        ]:
             values = []
             for arch in architectures:
                 bm = bm_lookup.get(arch.id)
@@ -147,82 +161,139 @@ def generate_markdown_report(db: Session, project_id: int, user_id: int) -> str:
                 values.append(str(round(val, 2)) if val is not None else "N/A")
             lines.append(f"| {label} | " + " | ".join(values) + " |")
 
-        lines += [""]
-
-        # Score breakdown table
-        lines += [
-            "### Score Breakdown",
-            "",
-            "| Score | " + " | ".join(
-                arch.arch_type.replace("_", " ").title() for arch in architectures
-            ) + " |",
+        lines += ["", "### Score Breakdown", "",
+            "| Score | " + " | ".join(a.arch_type.replace("_"," ").title() for a in architectures) + " |",
             "|-------|" + "|".join("--------|" for _ in architectures),
         ]
-
-        score_fields = [
+        for label, field in [
             ("Latency Score", "latency_score"),
             ("Throughput Score", "throughput_score"),
             ("Reliability Score", "reliability_score"),
             ("Efficiency Score", "efficiency_score"),
             ("**Overall Score**", "overall_score"),
-        ]
-
-        for label, field in score_fields:
-            values = []
-            for arch in architectures:
-                s = scores.get(arch.id, {})
-                val = s.get(field)
-                values.append(str(val) if val is not None else "N/A")
+        ]:
+            values = [str(scores.get(a.id, {}).get(field, "N/A")) for a in architectures]
             lines.append(f"| {label} | " + " | ".join(values) + " |")
-
-        lines += [""]
+        lines.append("")
     else:
         lines += ["_No benchmarks run yet._", ""]
 
-    # Resilience results
+    # Resilience Analysis
     lines += ["---", "", "## Resilience Analysis", ""]
-
     if resilience_results:
         lines += [
-            "| Architecture | Resilience Score | Availability | Failure Type | Recovered | Recovery Time |",
-            "|-------------|-----------------|--------------|--------------|-----------|---------------|",
+            "| Architecture | Score | Availability | Failure | Recovered | Recovery |",
+            "|-------------|-------|--------------|---------|-----------|----------|",
         ]
         for r in resilience_results:
             arch = next((a for a in architectures if a.id == r.architecture_id), None)
-            arch_name = arch.arch_type.replace("_", " ").title() if arch else "Unknown"
-            recovery = f"{round(r.recovery_time_ms)}ms" if r.recovery_time_ms else "Never"
+            name = arch.arch_type.replace("_"," ").title() if arch else "Unknown"
+            rec = f"{round(r.recovery_time_ms)}ms" if r.recovery_time_ms else "Never"
             lines.append(
-                f"| {arch_name} | {r.resilience_score}/100 | "
-                f"{r.availability_pct}% | {r.failure_type} | "
-                f"{'✓' if r.recovered else '✗'} | {recovery} |"
+                f"| {name} | {r.resilience_score}/100 | {r.availability_pct}% | "
+                f"{r.failure_type} | {'✓' if r.recovered else '✗'} | {rec} |"
             )
-        lines += [""]
-
-        lines += ["### Resilience Details", ""]
-        for r in resilience_results:
-            arch = next((a for a in architectures if a.id == r.architecture_id), None)
-            arch_name = arch.arch_type.replace("_", " ").title() if arch else "Unknown"
-            lines += [
-                f"**{arch_name}** — {r.failure_type} (killed `{r.container_killed}`)",
-                f"- Pre-failure p95 latency: {r.pre_latency_p95_ms}ms | "
-                f"Error rate: {r.pre_error_rate_pct}%",
-                f"- Failure-period p95 latency: {r.failure_latency_p95_ms}ms | "
-                f"Error rate: {r.failure_error_rate_pct}%",
-                f"- Availability: {r.availability_pct}% | "
-                f"Resilience Score: {r.resilience_score}/100",
-                "",
-            ]
+        lines.append("")
     else:
         lines += ["_No resilience tests run yet._", ""]
 
-    # Recommendation
-    lines += ["---", "", "## AI Recommendation", ""]
+    # V4: Bottleneck Analysis
+    lines += ["---", "", "## Bottleneck Analysis", ""]
+    if bottlenecks:
+        severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+        sorted_bottlenecks = sorted(bottlenecks, key=lambda b: severity_order.get(b.severity, 4))
+        for b in sorted_bottlenecks:
+            arch = next((a for a in architectures if a.id == b.architecture_id), None)
+            arch_name = arch.arch_type.replace("_"," ").title() if arch else "Unknown"
+            lines += [
+                f"### [{b.severity.upper()}] {b.bottleneck_type.replace('_',' ').title()} — {arch_name}",
+                "",
+            ]
+            for e in (b.evidence or []):
+                lines.append(f"- {e}")
+            if b.recommendation:
+                lines += ["", f"**Recommendation:** {b.recommendation}"]
+            lines.append("")
+    else:
+        lines += ["_No bottleneck analysis run yet. Call POST /analyze first._", ""]
 
+    # V4: Optimization Recommendations
+    lines += ["---", "", "## Optimization Recommendations", ""]
+    if optimizations:
+        for opt in optimizations:
+            lines += [
+                f"### [{opt.priority.upper()}] {opt.title}",
+                "",
+                opt.description,
+                "",
+                f"**Expected improvement:** {opt.expected_improvement}",
+                "",
+            ]
+    else:
+        lines += ["_No optimization recommendations generated yet._", ""]
+
+    # V4: Cost Estimates
+    lines += ["---", "", "## Cloud Cost Estimates", ""]
+    if costs:
+        lines += [
+            "| Architecture | Provider | Monthly Cost (USD) | Instance | vCPU | Memory (GB) |",
+            "|-------------|----------|--------------------|----------|------|-------------|",
+        ]
+        for c in costs:
+            arch = next((a for a in architectures if a.id == c.architecture_id), None)
+            arch_name = arch.arch_type.replace("_"," ").title() if arch else "Unknown"
+            lines.append(
+                f"| {arch_name} | {c.provider.upper()} | ${c.estimated_monthly_usd} | "
+                f"{c.instance_recommendation} | {c.cpu_units} | {c.memory_gb} |"
+            )
+        lines.append("")
+    else:
+        lines += ["_No cost estimates generated yet._", ""]
+
+    # V4: Capacity Projections
+    lines += ["---", "", "## Capacity Projections", ""]
+    if projections:
+        for p in projections:
+            arch = next((a for a in architectures if a.id == p.architecture_id), None)
+            arch_name = arch.arch_type.replace("_"," ").title() if arch else "Unknown"
+            ratio = round(p.expected_users / p.current_users, 1) if p.current_users else "N/A"
+            lines += [
+                f"### {arch_name} — {p.current_users:,} → {p.expected_users:,} users ({ratio}x growth)",
+                "",
+                f"- Projected p95 latency: {p.projected_latency_p95_ms}ms",
+                f"- Projected throughput: {p.projected_throughput_rps} req/s",
+                f"- Scaling recommendation: {p.scaling_recommendation}",
+                "",
+            ]
+            if p.expected_bottlenecks:
+                lines.append("**Expected bottlenecks:**")
+                for b in p.expected_bottlenecks:
+                    lines.append(f"- {b}")
+            lines.append("")
+    else:
+        lines += ["_No capacity projections generated yet._", ""]
+
+    # V4: Evolution Timeline
+    lines += ["---", "", "## Architecture Evolution Timeline", ""]
+    if evolution:
+        for i, step in enumerate(evolution):
+            arrow = "→" if step.from_arch_type else "◉"
+            from_name = step.from_arch_type.replace("_"," ").title() if step.from_arch_type else "Origin"
+            to_name = step.to_arch_type.replace("_"," ").title()
+            lines.append(f"{i+1}. **{from_name}** {arrow} **{to_name}**  ")
+            lines.append(f"   _Trigger: {step.trigger} · {step.created_at.strftime('%Y-%m-%d')}_")
+            if step.notes:
+                lines.append(f"   {step.notes}")
+            lines.append("")
+    else:
+        lines += ["_No evolution history yet._", ""]
+
+    # AI Recommendation
+    lines += ["---", "", "## AI Recommendation", ""]
     if recommendation:
         lines += [
-            f"**Recommended Architecture:** {recommendation.recommended_arch_type.replace('_', ' ').title()}  ",
+            f"**Recommended:** {recommendation.recommended_arch_type.replace('_',' ').title()}  ",
             f"**Confidence:** {round(recommendation.confidence_score * 100)}%  ",
-            f"**Provider:** {recommendation.llm_provider}  ",
             "",
             recommendation.reasoning,
             "",
@@ -233,12 +304,10 @@ def generate_markdown_report(db: Session, project_id: int, user_id: int) -> str:
     lines += [
         "---",
         "",
-        "_Report generated by [ArchBench](https://github.com/Pratyaksh-13/ai-architecture-benchmark) "
-        "— AI Architecture Benchmarking Platform_",
+        "_Generated by [ArchBench](https://github.com/Pratyaksh-13/ai-architecture-benchmark)_",
     ]
 
     return "\n".join(lines)
-
 
 def generate_pdf_report(db: Session, project_id: int, user_id: int) -> bytes:
     """Converts the Markdown report to PDF via weasyprint."""

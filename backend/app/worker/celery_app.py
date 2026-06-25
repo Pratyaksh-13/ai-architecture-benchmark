@@ -20,5 +20,6 @@ celery_app.conf.update(
     task_track_started=True,         # tasks show STARTED state (not just PENDING)
     result_expires=3600,             # results kept for 1 hour
     worker_prefetch_multiplier=1,    # one task at a time per worker
+    worker_concurrency=1,             # only one process — benchmarks use Docker ports
     task_acks_late=True,             # task only marked done after it actually completes
 )

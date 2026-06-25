@@ -29,5 +29,3 @@ class Benchmark(Base):
     run_id = Column(Integer, ForeignKey("benchmark_runs.id"), nullable=True)
     run = relationship("BenchmarkRun", back_populates="benchmarks")
     
-
-    architecture = relationship("Architecture", backref="benchmark")

@@ -1,6 +1,6 @@
 # app/api/projects.py
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
@@ -307,30 +307,39 @@ def run_real_benchmark_async(
     )
 
 
+@router.delete("/jobs/{job_id}", response_model=JobStatusResponse)
+def cancel_job(job_id: str):
+    """Cancel a queued or running benchmark job."""
+    try:
+        result = AsyncResult(job_id, app=celery_app)
+        result.revoke(terminate=True, signal="SIGTERM")
+        return JobStatusResponse(job_id=job_id, status="cancelled")
+    except Exception as e:
+        return JobStatusResponse(job_id=job_id, status="failed", error=str(e))
+
 @router.get("/jobs/{job_id}", response_model=JobStatusResponse)
 def get_job_status(job_id: str):
     """Check the status of a queued benchmark job."""
-    result = AsyncResult(job_id, app=celery_app)
-
-    if result.state == "PENDING":
+    try:
+        result = AsyncResult(job_id, app=celery_app)
+        state = result.state
+    except Exception:
         return JobStatusResponse(job_id=job_id, status="pending")
-    elif result.state == "STARTED":
-        return JobStatusResponse(
-            job_id=job_id,
-            status="running",
-            meta=result.info,
-        )
-    elif result.state == "SUCCESS":
-        return JobStatusResponse(
-            job_id=job_id,
-            status="complete",
-            result=result.result,
-        )
-    elif result.state == "FAILURE":
-        return JobStatusResponse(
-            job_id=job_id,
-            status="failed",
-            error=str(result.result),
-        )
-    else:
-        return JobStatusResponse(job_id=job_id, status=result.state.lower())
+
+    try:
+        if state == "PENDING":
+            return JobStatusResponse(job_id=job_id, status="pending")
+        elif state == "STARTED":
+            return JobStatusResponse(job_id=job_id, status="running", meta=result.info)
+        elif state == "SUCCESS":
+            return JobStatusResponse(job_id=job_id, status="complete", result=result.result)
+        elif state == "FAILURE":
+            try:
+                error_msg = str(result.result)
+            except Exception:
+                error_msg = "Job failed with unknown error"
+            return JobStatusResponse(job_id=job_id, status="failed", error=error_msg)
+        else:
+            return JobStatusResponse(job_id=job_id, status=result.state.lower())
+    except Exception as e:
+        return JobStatusResponse(job_id=job_id, status="failed", error=str(e))
