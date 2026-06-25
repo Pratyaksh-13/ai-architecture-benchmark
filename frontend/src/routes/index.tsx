@@ -1,21 +1,29 @@
+
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Protected } from "@/components/Shell";
 import { projects as projectsApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Dashboard — ArchBench" }] }),
-  ssr:false,
+  ssr: false,
   component: () => <Protected><Dashboard /></Protected>,
 });
 
 function Dashboard() {
   const { user } = useAuth();
+  const qc = useQueryClient();
+
   const { data: projects, isLoading, error } = useQuery({
     queryKey: ["projects"],
     queryFn: () => projectsApi.list(),
     enabled: !!user,
+  });
+
+  const deleteProject = useMutation({
+    mutationFn: (id: number) => projectsApi.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
   });
 
   const total = projects?.length ?? 0;
@@ -56,16 +64,29 @@ function Dashboard() {
         <ul className="hairline divide-y divide-hairline" style={{ borderColor: "var(--hairline)" }}>
           {projects.map((p) => (
             <li key={p.id} style={{ borderColor: "var(--hairline)" }} className="border-t first:border-t-0">
-              <Link to="/projects/$id" params={{ id: String(p.id) }} className="flex items-start justify-between gap-6 p-5 hover:bg-secondary">
-                <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-6 p-5 hover:bg-secondary">
+                <Link to="/projects/$id" params={{ id: String(p.id) }} className="min-w-0 flex-1">
                   <div className="label-anno mb-2">PROJECT #{String(p.id).padStart(4, "0")}</div>
                   <div className="line-clamp-2" style={{ fontFamily: "var(--font-display)", fontSize: "1.15rem" }}>{p.requirement}</div>
-                </div>
+                </Link>
                 <div className="flex flex-col items-end gap-2 shrink-0">
                   <StatusBadge status={p.status} />
                   <div className="label-anno">{new Date(p.created_at).toLocaleDateString()}</div>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (confirm(`Delete project #${String(p.id).padStart(4, "0")}? This cannot be undone.`)) {
+                        deleteProject.mutate(p.id);
+                      }
+                    }}
+                    disabled={deleteProject.isPending}
+                    className="label-anno border px-2 py-1 disabled:opacity-40"
+                    style={{ color: "var(--annotation)", borderColor: "var(--annotation)", background: "none", cursor: "pointer", fontSize: "0.6rem" }}
+                  >
+                    {deleteProject.isPending ? "…" : "✕ DELETE"}
+                  </button>
                 </div>
-              </Link>
+              </div>
             </li>
           ))}
         </ul>
@@ -85,10 +106,10 @@ function Stat({ label, value }: { label: string; value: number | string }) {
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { c: string; t: string }> = {
-    done: { c: "var(--blueprint)", t: "COMPLETE" },
-    generating: { c: "var(--graphite)", t: "DRAFTING" },
-    pending: { c: "var(--graphite)", t: "PENDING" },
-    failed: { c: "var(--annotation)", t: "FAILED" },
+    done:       { c: "var(--blueprint)",  t: "COMPLETE" },
+    generating: { c: "var(--graphite)",   t: "DRAFTING"  },
+    pending:    { c: "var(--graphite)",   t: "PENDING"   },
+    failed:     { c: "var(--annotation)", t: "FAILED"    },
   };
   const s = map[status] ?? { c: "var(--graphite)", t: status.toUpperCase() };
   return (

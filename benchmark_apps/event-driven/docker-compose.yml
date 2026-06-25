@@ -11,7 +11,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-
   worker:
     build: ./worker
     environment:
@@ -22,10 +21,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-
   redis:
     image: redis:7-alpine
-
   db:
     image: postgres:15-alpine
     environment:
@@ -37,27 +34,6 @@ services:
       interval: 3s
       timeout: 3s
       retries: 5
-
-  prometheus:
-    image: prom/prometheus:latest
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-    depends_on:
-      - app
-
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=archbench
-      - GF_AUTH_ANONYMOUS_ENABLED=true
-      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
-    depends_on:
-      - prometheus
-
   prometheus:
     image: prom/prometheus:latest
     ports:
@@ -66,7 +42,6 @@ services:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
     depends_on:
       - api
-
   grafana:
     image: grafana/grafana:latest
     ports:
