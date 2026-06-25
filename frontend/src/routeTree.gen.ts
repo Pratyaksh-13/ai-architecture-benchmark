@@ -15,6 +15,7 @@ import { Route as NewRouteImport } from './routes/new'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProjectsIdRouteImport } from './routes/projects.$id'
+import { Route as ProjectsIdSummaryRouteImport } from './routes/projects.$id.summary'
 import { Route as ProjectsIdAnalysisRouteImport } from './routes/projects.$id.analysis'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
@@ -47,6 +48,11 @@ const ProjectsIdRoute = ProjectsIdRouteImport.update({
   path: '/projects/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProjectsIdSummaryRoute = ProjectsIdSummaryRouteImport.update({
+  id: '/summary',
+  path: '/summary',
+  getParentRoute: () => ProjectsIdRoute,
+} as any)
 const ProjectsIdAnalysisRoute = ProjectsIdAnalysisRouteImport.update({
   id: '/analysis',
   path: '/analysis',
@@ -61,6 +67,7 @@ export interface FileRoutesByFullPath {
   '/verify-email': typeof VerifyEmailRoute
   '/projects/$id': typeof ProjectsIdRouteWithChildren
   '/projects/$id/analysis': typeof ProjectsIdAnalysisRoute
+  '/projects/$id/summary': typeof ProjectsIdSummaryRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,6 +77,7 @@ export interface FileRoutesByTo {
   '/verify-email': typeof VerifyEmailRoute
   '/projects/$id': typeof ProjectsIdRouteWithChildren
   '/projects/$id/analysis': typeof ProjectsIdAnalysisRoute
+  '/projects/$id/summary': typeof ProjectsIdSummaryRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,6 +88,7 @@ export interface FileRoutesById {
   '/verify-email': typeof VerifyEmailRoute
   '/projects/$id': typeof ProjectsIdRouteWithChildren
   '/projects/$id/analysis': typeof ProjectsIdAnalysisRoute
+  '/projects/$id/summary': typeof ProjectsIdSummaryRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -91,6 +100,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/projects/$id'
     | '/projects/$id/analysis'
+    | '/projects/$id/summary'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -100,6 +110,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/projects/$id'
     | '/projects/$id/analysis'
+    | '/projects/$id/summary'
   id:
     | '__root__'
     | '/'
@@ -109,6 +120,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/projects/$id'
     | '/projects/$id/analysis'
+    | '/projects/$id/summary'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -164,6 +176,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/projects/$id/summary': {
+      id: '/projects/$id/summary'
+      path: '/summary'
+      fullPath: '/projects/$id/summary'
+      preLoaderRoute: typeof ProjectsIdSummaryRouteImport
+      parentRoute: typeof ProjectsIdRoute
+    }
     '/projects/$id/analysis': {
       id: '/projects/$id/analysis'
       path: '/analysis'
@@ -176,10 +195,12 @@ declare module '@tanstack/react-router' {
 
 interface ProjectsIdRouteChildren {
   ProjectsIdAnalysisRoute: typeof ProjectsIdAnalysisRoute
+  ProjectsIdSummaryRoute: typeof ProjectsIdSummaryRoute
 }
 
 const ProjectsIdRouteChildren: ProjectsIdRouteChildren = {
   ProjectsIdAnalysisRoute: ProjectsIdAnalysisRoute,
+  ProjectsIdSummaryRoute: ProjectsIdSummaryRoute,
 }
 
 const ProjectsIdRouteWithChildren = ProjectsIdRoute._addFileChildren(

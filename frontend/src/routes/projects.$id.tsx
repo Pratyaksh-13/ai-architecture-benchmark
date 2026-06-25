@@ -37,7 +37,7 @@ function ProjectOverview() {
   const qc = useQueryClient();
   const matchRoute = useMatchRoute();
   const isAnalysis = !!matchRoute({ to: "/projects/$id/analysis", params: { id } });
-
+  const isSummary  = !!matchRoute({ to: "/projects/$id/summary",  params: { id } });
   const projectQ = useQuery({ queryKey: ["project", pid], queryFn: () => projectsApi.get(pid) });
   const archQ    = useQuery({ queryKey: ["arch", pid],    queryFn: () => projectsApi.architectures(pid) });
   const benchQ   = useQuery({ queryKey: ["bench", pid],   queryFn: () => projectsApi.benchmarks(pid) });
@@ -161,8 +161,7 @@ function ProjectOverview() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["rec", pid] }),
   });
 
-  if (isAnalysis) return <Outlet />;
-
+  if (isAnalysis || isSummary) return <Outlet />;
   if (projectQ.isLoading) return <div className="p-10 label-anno">LOADING PROJECT…</div>;
   if (projectQ.error) return <div className="p-10" style={{ color: "var(--annotation)" }}>{(projectQ.error as Error).message}</div>;
 
