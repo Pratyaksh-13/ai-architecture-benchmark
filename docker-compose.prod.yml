@@ -1,0 +1,160 @@
+services:
+  # ─── Infrastructure ───────────────────────────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-pratyaksh}
+      POSTGRES_DB: archbench
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ─── Core Platform ────────────────────────────────────────────────────────────
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-pratyaksh}@db:5432/archbench
+      REDIS_URL: redis://redis:6379/1
+      RESULT_BACKEND_URL: redis://redis:6379/2
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_BASE_URL: https://openrouter.ai/api/v1
+      OPENAI_MODEL: ${OPENAI_MODEL:-openai/gpt-4o-mini}
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      FRONTEND_URL: http://${EC2_PUBLIC_IP}
+      MONOLITH_URL: http://${EC2_PUBLIC_IP}:8001
+      MICROSERVICES_URL: http://${EC2_PUBLIC_IP}:8002
+      EVENT_DRIVEN_URL: http://${EC2_PUBLIC_IP}:8003
+      CHAOS_TOKEN: ${CHAOS_TOKEN}
+      # Optional — leave blank to enable auto-verification
+      GMAIL_ADDRESS: ${GMAIL_ADDRESS:-}
+      GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  celery:
+    build: ./backend
+    command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=1
+    environment:
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-pratyaksh}@db:5432/archbench
+      REDIS_URL: redis://redis:6379/1
+      RESULT_BACKEND_URL: redis://redis:6379/2
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_BASE_URL: https://openrouter.ai/api/v1
+      OPENAI_MODEL: ${OPENAI_MODEL:-openai/gpt-4o-mini}
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      CHAOS_TOKEN: ${CHAOS_TOKEN}
+      GMAIL_ADDRESS: ${GMAIL_ADDRESS:-}
+      GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=http://${EC2_PUBLIC_IP}:8000/api/v1
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # ─── Benchmark Applications ───────────────────────────────────────────────────
+  monolith:
+    build: ./benchmark_apps/monolith
+    environment:
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-pratyaksh}@db:5432/archbench
+      CHAOS_TOKEN: ${CHAOS_TOKEN}
+    ports:
+      - "8001:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  microservices-gateway:
+    image: nginx:alpine
+    volumes:
+      - ./benchmark_apps/microservices/gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8002:80"
+    depends_on:
+      - microservices-shortener
+      - microservices-redirect
+    restart: unless-stopped
+
+  microservices-shortener:
+    build: ./benchmark_apps/microservices/shortener-service
+    environment:
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-pratyaksh}@db:5432/archbench
+      CHAOS_TOKEN: ${CHAOS_TOKEN}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  microservices-redirect:
+    build: ./benchmark_apps/microservices/redirect-service
+    environment:
+      SHORTENER_SERVICE_URL: http://microservices-shortener:8000
+    depends_on:
+      - microservices-shortener
+    restart: unless-stopped
+
+  event-driven-api:
+    build: ./benchmark_apps/event-driven/api
+    environment:
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-pratyaksh}@db:5432/archbench
+      REDIS_URL: redis://redis:6379/1
+      CHAOS_TOKEN: ${CHAOS_TOKEN}
+    ports:
+      - "8003:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  event-driven-worker:
+    build: ./benchmark_apps/event-driven/worker
+    environment:
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-pratyaksh}@db:5432/archbench
+      REDIS_URL: redis://redis:6379/1
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:

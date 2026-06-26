@@ -3,6 +3,7 @@ import { useState } from "react";
 import { auth, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Shell } from "@/components/Shell";
+import { PublicShell } from "@/components/Shell";
 
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "Sign in — ArchBench" }] }),
@@ -40,30 +41,30 @@ function Login() {
   }
 
   return (
-    <Shell>
-      <div className="mx-auto max-w-md px-6 py-16">
-        <div className="label-anno">SHEET A · ACCESS</div>
-        <h1 className="text-4xl mt-2 mb-8">Sign in</h1>
-        <form onSubmit={submit} className="space-y-5 hairline p-8" style={{ backgroundColor: "var(--paper)" }}>
-          <Field label="Email" type="email" value={email} onChange={setEmail} required />
-          <Field label="Password" type="password" value={password} onChange={setPassword} required />
-          {err && (
-            <div className="hairline p-3 text-sm" style={{ color: "var(--annotation)", borderColor: "var(--annotation)" }}>
-              <span className="label-anno block mb-1" style={{ color: "var(--annotation)" }}>NOTICE</span>
-              {err}
-              {unverified && (
-                <button type="button" onClick={resend} className="ghost-btn mt-3 block">Resend verification</button>
-              )}
-            </div>
-          )}
-          <button disabled={busy} className="ink-btn w-full disabled:opacity-50">{busy ? "Signing in…" : "Sign in"}</button>
-        </form>
-        <div className="mt-6 label-anno text-center">
-          No account? <Link to="/signup" style={{ color: "var(--blueprint)" }}>CREATE ONE</Link>
-        </div>
+  <PublicShell>
+    <div className="mx-auto max-w-md px-6 py-16">
+      <div className="label-anno">SHEET A · ACCESS</div>
+      <h1 className="text-4xl mt-2 mb-8">Sign in</h1>
+      <form onSubmit={submit} className="space-y-5 hairline p-8" style={{ backgroundColor: "var(--paper)" }}>
+        <Field label="Email" type="email" value={email} onChange={setEmail} required />
+        <Field label="Password" type="password" value={password} onChange={setPassword} required />
+        {err && (
+          <div className="hairline p-3 text-sm" style={{ color: "var(--annotation)", borderColor: "var(--annotation)" }}>
+            <span className="label-anno block mb-1" style={{ color: "var(--annotation)" }}>NOTICE</span>
+            {err}
+            {unverified && (
+              <button type="button" onClick={resend} className="ghost-btn mt-3 block">Resend verification</button>
+            )}
+          </div>
+        )}
+        <button disabled={busy} className="ink-btn w-full disabled:opacity-50">{busy ? "Signing in…" : "Sign in"}</button>
+      </form>
+      <div className="mt-6 label-anno text-center">
+        No account? <Link to="/signup" style={{ color: "var(--blueprint)" }}>CREATE ONE</Link>
       </div>
-    </Shell>
-  );
+    </div>
+  </PublicShell>
+);
 }
 
 export function Field({ label, type, value, onChange, required }: { label: string; type?: string; value: string; onChange: (v: string) => void; required?: boolean }) {

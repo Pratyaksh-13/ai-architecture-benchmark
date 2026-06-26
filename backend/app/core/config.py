@@ -1,5 +1,6 @@
 # app/core/config.py
 
+from typing import Optional
 from pydantic_settings import BaseSettings
 
 
@@ -8,9 +9,10 @@ class Settings(BaseSettings):
     jwt_secret_key: str
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24 * 7
-    gmail_address: str
-    gmail_app_password: str
-    frontend_url: str = "http://localhost:5173"
+    # Optional — if not provided, signup auto-verifies accounts
+    gmail_address: Optional[str] = pratyakshtyagi804@gmail.com
+    gmail_app_password: Optional[str] = Pratyaksh@13
+    frontend_url: str = "http://localhost:3000"
 
     class Config:
         env_file = ".env"

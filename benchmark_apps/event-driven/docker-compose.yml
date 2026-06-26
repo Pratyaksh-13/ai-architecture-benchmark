@@ -39,7 +39,7 @@ services:
     ports:
       - "9092:9090"
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - /home/pratyaksh/projects/ai-architecture-benchmark/benchmark_apps/event-driven/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     depends_on:
       - api
   grafana:
@@ -51,6 +51,6 @@ services:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
     volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - /home/pratyaksh/projects/ai-architecture-benchmark/benchmark_apps/event-driven/grafana/provisioning:/etc/grafana/provisioning:ro
     depends_on:
       - prometheus

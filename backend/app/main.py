@@ -27,13 +27,24 @@ app = FastAPI(
 
 
 
+from app.core.config import settings as _settings
+
+# Build the set of allowed origins.
+# allow_origin_regex covers Lovable preview URLs, localhost dev ports, and ngrok tunnels.
+# allow_origins explicitly adds whatever FRONTEND_URL is set to (e.g. the EC2 public IP).
+_cors_origins = []
+if _settings.frontend_url:
+    _cors_origins.append(_settings.frontend_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"https://.*\.lovable\.app|http://localhost:5173|http://localhost:8080|https://.*\.ngrok-free\.(app|dev)",
+    allow_origins=_cors_origins,
+    allow_origin_regex=r"https://.*\.lovable\.app|http://localhost:5173|http://localhost:8080|http://localhost:3000|https://.*\.ngrok-free\.(app|dev)|http://\d+\.\d+\.\d+\.\d+(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 app.include_router(projects.router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")

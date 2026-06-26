@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { auth } from "@/lib/api";
-import { Shell } from "@/components/Shell";
+import { PublicShell } from "@/components/Shell";
 import { Field } from "./login";
 
 export const Route = createFileRoute("/signup")({
@@ -28,11 +28,10 @@ function Signup() {
   }
 
   return (
-    <Shell>
+    <PublicShell>
       <div className="mx-auto max-w-md px-6 py-16">
         <div className="label-anno">SHEET A · ENROLLMENT</div>
         <h1 className="text-4xl mt-2 mb-8">Create account</h1>
-
         {done ? (
           <div className="hairline p-8" style={{ backgroundColor: "var(--paper)" }}>
             <div className="label-anno mb-3" style={{ color: "var(--blueprint)" }}>STAMPED · APPROVED</div>
@@ -51,11 +50,10 @@ function Signup() {
             <button disabled={busy} className="ink-btn w-full disabled:opacity-50">{busy ? "Creating…" : "Create account"}</button>
           </form>
         )}
-
         <div className="mt-6 label-anno text-center">
           Already have one? <Link to="/login" style={{ color: "var(--blueprint)" }}>SIGN IN</Link>
         </div>
       </div>
-    </Shell>
+    </PublicShell>
   );
 }

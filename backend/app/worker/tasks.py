@@ -1,22 +1,12 @@
 # app/worker/tasks.py
 from app.worker.celery_app import celery_app
 from app.database.connection import SessionLocal
-
-# Import ALL models so SQLAlchemy mapper can resolve all relationships
-from app.models import project
-from app.models import architecture
-from app.models import architecture_evolution
-from app.models import benchmark
-from app.models import benchmark_run
-from app.models import bottleneck_finding
-from app.models import capacity_projection
-from app.models import cost_estimate
-from app.models import optimization_recommendation
-from app.models import recommendation
-from app.models import resilience_result
-from app.models import service_split_recommendation
-from app.models import user
-
+from app.models import (
+    project, architecture, architecture_evolution, benchmark,
+    benchmark_run, bottleneck_finding, capacity_projection,
+    cost_estimate, optimization_recommendation, recommendation,
+    resilience_result, service_split_recommendation, user,
+)
 
 @celery_app.task(bind=True, name="run_real_benchmark")
 def run_real_benchmark_task(self, project_id: int, user_id: int, load_profile: str = "medium"):
@@ -32,10 +22,8 @@ def run_real_benchmark_task(self, project_id: int, user_id: int, load_profile: s
             "load_profile": load_profile,
         }
     except RealBenchmarkError as e:
-        self.update_state(state="FAILURE", meta={"status": "failed", "error": str(e)})
         return {"status": "failed", "error": str(e)}
     except Exception as e:
-        self.update_state(state="FAILURE", meta={"status": "failed", "error": str(e)})
         return {"status": "failed", "error": str(e)}
     finally:
         db.close()

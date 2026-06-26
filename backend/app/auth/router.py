@@ -24,27 +24,34 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
 
+    from app.core.config import settings
+
+    # If no Gmail credentials are configured, auto-verify so users aren't locked out.
+    email_enabled = bool(settings.gmail_address and settings.gmail_app_password)
+
     token, expires = generate_verification_token()
 
     user = User(
         email=payload.email,
         hashed_password=hash_password(payload.password),
-        is_verified=False,
-        verification_token=token,
-        verification_token_expires=expires,
+        is_verified=not email_enabled,   # auto-verify when email is disabled
+        verification_token=token if email_enabled else None,
+        verification_token_expires=expires if email_enabled else None,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
 
-    try:
-        send_verification_email(user.email, token)
-    except Exception as e:
-        # User is created either way — log the email failure but don't crash the request.
-        # In production this should trigger an alert; for now, surface a clear message.
-        print(f"WARNING: failed to send verification email to {user.email}: {e}")
+    if email_enabled:
+        try:
+            send_verification_email(user.email, token)
+        except Exception as e:
+            # User is created either way — log the email failure but don't crash the request.
+            # In production this should trigger an alert; for now, surface a clear message.
+            print(f"WARNING: failed to send verification email to {user.email}: {e}")
 
     return user
+
 
 
 @router.get("/verify")

@@ -52,3 +52,24 @@ export function Protected({ children }: { children: ReactNode }) {
   if (!user) return null;
   return <Shell>{children}</Shell>;
 }
+export function PublicShell({ children }: { children: ReactNode }) {
+  return (
+    <div className="min-h-screen flex flex-col">
+      <header className="border-b border-hairline bg-paper" style={{ borderColor: "var(--hairline)" }}>
+        <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
+          <a href="/" className="flex items-baseline gap-3">
+            <span style={{ fontFamily: "var(--font-display)" }} className="text-2xl tracking-tight">ArchBench</span>
+            <span className="label-anno hidden sm:inline">SYSTEM ARCHITECTURE BENCH · v1.0</span>
+          </a>
+        </div>
+      </header>
+      <main className="flex-1 animate-route-in">{children}</main>
+      <footer className="border-t border-hairline mt-16">
+        <div className="mx-auto max-w-7xl px-6 py-6 flex items-center justify-between label-anno">
+          <span>SHEET 01 / 01</span>
+          <span>DRAWN BY ARCHBENCH · NOT FOR CONSTRUCTION</span>
+        </div>
+      </footer>
+    </div>
+  );
+}

@@ -80,6 +80,6 @@ def _parse_k6_summary(summary: dict) -> dict:
         # k6 doesn't measure container-level CPU/memory directly — that
         # would require a separate `docker stats` poller running alongside
         # the load test. Documented as a known limitation for now.
-        "cpu_usage_pct": None,
-        "memory_usage_mb": None,
+        "cpu_usage_pct": 0.0,
+        "memory_usage_mb": 0.0,
     }

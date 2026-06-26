@@ -9,6 +9,7 @@ from app.database import Base, engine, get_db
 from app.models import ShortUrl
 from app.schemas import ShortenRequest, ShortenResponse, StatsResponse
 from app.events import publish_click_event
+from app.chaos import router as chaos_router, get_chaos_state
 
 Base.metadata.create_all(bind=engine)
 
@@ -18,6 +19,7 @@ Instrumentator().instrument(app).expose(app)
 from prometheus_fastapi_instrumentator import Instrumentator
 
 Instrumentator().instrument(app).expose(app)
+app.include_router(chaos_router)
 
 ALPHABET = string.ascii_letters + string.digits
 CODE_LENGTH = 6

@@ -9,11 +9,13 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from app.database import Base, engine, get_db
 from app.models import ShortUrl
 from app.schemas import ShortenRequest, ShortenResponse, StatsResponse
+from app.chaos import router as chaos_router, get_chaos_state
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="URL Shortener — Monolith Architecture")
 Instrumentator().instrument(app).expose(app)
+app.include_router(chaos_router)
 
 ALPHABET = string.ascii_letters + string.digits
 CODE_LENGTH = 6
@@ -31,6 +33,13 @@ def health():
 
 @app.post("/shorten", response_model=ShortenResponse, status_code=201)
 def shorten(payload: ShortenRequest, db: Session = Depends(get_db)):
+    import time, random
+    state = get_chaos_state()
+    if state["active"]:
+        if state["delay_ms"] > 0:
+            time.sleep(state["delay_ms"] / 1000)
+        if state["error_rate"] > 0 and random.random() < state["error_rate"]:
+            raise HTTPException(status_code=503, detail="Service degraded (chaos)")
     for _ in range(MAX_GENERATION_ATTEMPTS):
         code = generate_code()
         entry = ShortUrl(code=code, original_url=str(payload.url))

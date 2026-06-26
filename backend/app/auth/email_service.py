@@ -19,6 +19,11 @@ def generate_verification_token() -> tuple[str, datetime]:
 
 
 def send_verification_email(to_email: str, token: str):
+    if not settings.gmail_address or not settings.gmail_app_password:
+        raise RuntimeError(
+            "Email sending is not configured: GMAIL_ADDRESS and GMAIL_APP_PASSWORD must be set."
+        )
+
     verify_link = f"{settings.frontend_url}/verify-email?token={token}"
 
     html_body = f"""

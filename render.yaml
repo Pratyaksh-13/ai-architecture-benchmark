@@ -1,0 +1,154 @@
+services:
+  # ── Backend API ──────────────────────────────────────────────────────────
+  - type: web
+    name: archbench-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: archbench-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: archbench-redis
+          type: redis
+          property: connectionString
+      - key: RESULT_BACKEND_URL
+        fromService:
+          name: archbench-redis
+          type: redis
+          property: connectionString
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_BASE_URL
+        value: https://openrouter.ai/api/v1
+      - key: MONOLITH_URL
+        fromService:
+          name: archbench-monolith
+          type: web
+          property: host
+      - key: MICROSERVICES_URL
+        fromService:
+          name: archbench-microservices
+          type: web
+          property: host
+      - key: EVENT_DRIVEN_URL
+        fromService:
+          name: archbench-eventdriven
+          type: web
+          property: host
+      - key: CHAOS_TOKEN
+        sync: false
+
+  # ── Celery Worker ─────────────────────────────────────────────────────────
+  - type: worker
+    name: archbench-celery
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile.worker
+    dockerContext: ./backend
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: archbench-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: archbench-redis
+          type: redis
+          property: connectionString
+      - key: RESULT_BACKEND_URL
+        fromService:
+          name: archbench-redis
+          type: redis
+          property: connectionString
+      - key: MONOLITH_URL
+        fromService:
+          name: archbench-monolith
+          type: web
+          property: host
+      - key: MICROSERVICES_URL
+        fromService:
+          name: archbench-microservices
+          type: web
+          property: host
+      - key: EVENT_DRIVEN_URL
+        fromService:
+          name: archbench-eventdriven
+          type: web
+          property: host
+      - key: CHAOS_TOKEN
+        sync: false
+
+  # ── Frontend ──────────────────────────────────────────────────────────────
+  - type: web
+    name: archbench-frontend
+    runtime: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        fromService:
+          name: archbench-backend
+          type: web
+          property: host
+
+  # ── Benchmark Apps ────────────────────────────────────────────────────────
+  - type: web
+    name: archbench-monolith
+    runtime: docker
+    dockerfilePath: ./benchmark_apps/monolith/Dockerfile
+    dockerContext: ./benchmark_apps/monolith
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: archbench-monolith-db
+          property: connectionString
+      - key: CHAOS_TOKEN
+        sync: false
+
+  - type: web
+    name: archbench-microservices
+    runtime: docker
+    dockerfilePath: ./benchmark_apps/microservices/Dockerfile
+    dockerContext: ./benchmark_apps/microservices
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: archbench-micro-db
+          property: connectionString
+      - key: CHAOS_TOKEN
+        sync: false
+
+  - type: web
+    name: archbench-eventdriven
+    runtime: docker
+    dockerfilePath: ./benchmark_apps/event-driven/Dockerfile
+    dockerContext: ./benchmark_apps/event-driven
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: archbench-events-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: archbench-redis
+          type: redis
+          property: connectionString
+      - key: CHAOS_TOKEN
+        sync: false
+
+databases:
+  - name: archbench-db
+    plan: free
+  - name: archbench-monolith-db
+    plan: free
+  - name: archbench-micro-db
+    plan: free
+  - name: archbench-events-db
+    plan: free
+
+  - type: redis
+    name: archbench-redis
+    plan: free
