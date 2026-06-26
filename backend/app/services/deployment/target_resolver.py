@@ -3,9 +3,9 @@ import os
 
 
 ARCH_URLS = {
-    "monolithic":     os.getenv("MONOLITH_URL",      "http://localhost:8001"),
-    "microservices":  os.getenv("MICROSERVICES_URL",  "http://localhost:8002"),
-    "event_driven":   os.getenv("EVENT_DRIVEN_URL",   "http://localhost:8003"),
+    "monolithic":     os.getenv("MONOLITH_URL",      "http://monolith:8000"),
+    "microservices":  os.getenv("MICROSERVICES_URL",  "http://microservices-gateway"),
+    "event_driven":   os.getenv("EVENT_DRIVEN_URL",   "http://event-driven-api:8000"),
 }
 
 CHAOS_TOKEN = os.getenv("CHAOS_TOKEN", "dev-chaos-token")

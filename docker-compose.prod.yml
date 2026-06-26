@@ -26,7 +26,9 @@ services:
 
   # ─── Core Platform ────────────────────────────────────────────────────────────
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     environment:
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-pratyaksh}@db:5432/archbench
       REDIS_URL: redis://redis:6379/1
@@ -54,7 +56,9 @@ services:
     restart: unless-stopped
 
   celery:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=1
     environment:
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-pratyaksh}@db:5432/archbench

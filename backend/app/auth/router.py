@@ -108,8 +108,8 @@ def login(payload: UserLogin, response: Response, db: Session = Depends(get_db))
     value=access_token,
     max_age=COOKIE_MAX_AGE,
     httponly=True,
-    secure=True,           # changed from False — required for SameSite=None
-    samesite="none",       # changed from "lax" — required for cross-site (Lovable -> your backend)
+    secure=False,           # changed from False — required for SameSite=None
+    samesite="lax",       # changed from "lax" — required for cross-site (Lovable -> your backend)
     )
 
     return {"message": "logged in", "user": {"id": user.id, "email": user.email}}
