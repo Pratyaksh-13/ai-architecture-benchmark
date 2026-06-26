@@ -10,8 +10,8 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24 * 7
     # Optional — if not provided, signup auto-verifies accounts
-    gmail_address: Optional[str] = "pratyakshtyagi804@gmail.com"
-    gmail_app_password: Optional[str] = "Pratyaksh@13"
+    gmail_address: Optional[str] = None
+    gmail_app_password: Optional[str] = None
     frontend_url: str = "http://localhost:3000"
 
     class Config:
