@@ -39,9 +39,9 @@ services:
       LLM_PROVIDER: ${LLM_PROVIDER:-openai}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       FRONTEND_URL: http://${EC2_PUBLIC_IP}
-      MONOLITH_URL: http://${EC2_PUBLIC_IP}:8001
-      MICROSERVICES_URL: http://${EC2_PUBLIC_IP}:8002
-      EVENT_DRIVEN_URL: http://${EC2_PUBLIC_IP}:8003
+      MONOLITH_URL: http://monolith:8000
+      MICROSERVICES_URL: http://microservices-gateway
+      EVENT_DRIVEN_URL: http://event-driven-api:8000
       CHAOS_TOKEN: ${CHAOS_TOKEN}
       # Optional — leave blank to enable auto-verification
       GMAIL_ADDRESS: ${GMAIL_ADDRESS:-}
